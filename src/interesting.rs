@@ -212,6 +212,14 @@ impl<T, U> IsInteresting for Or<T, U>
     }
 }
 
+impl<T> IsInteresting for T
+    where T: for<'a> Fn(&'a path::Path) -> error::Result<bool>
+{
+    fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
+        (*self)(potential_reduction)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate tempfile;
@@ -314,6 +322,20 @@ mod tests {
             Script::new(get_exit_1()),
             Script::new(get_exit_1())
         );
+        let test_case = tempfile::NamedTempFile::new().unwrap();
+        assert!(!test.is_interesting(test_case.path()).unwrap());
+    }
+
+    #[test]
+    fn func_returns_true() {
+        let test = |_: &path::Path| Ok(true);
+        let test_case = tempfile::NamedTempFile::new().unwrap();
+        assert!(test.is_interesting(test_case.path()).unwrap());
+    }
+
+    #[test]
+    fn func_returns_false() {
+        let test = |_: &path::Path| Ok(false);
         let test_case = tempfile::NamedTempFile::new().unwrap();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
