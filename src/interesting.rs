@@ -102,6 +102,116 @@ impl IsInteresting for Script {
     }
 }
 
+/// Given two is-interesting tests, combine them into a single is-interesting
+/// test that returns `true` if both sub-is-interesting tests return `true`, and
+/// `false` otherwise.
+///
+/// Beyond generally combining is-interesting tests, `And` provides
+/// short-circuiting, which is helpful when one is-interesting test is
+/// significantly faster than the other.
+///
+/// ### Example
+///
+/// ```
+/// extern crate preduce;
+/// use preduce::traits::IsInteresting;
+/// # fn main() { fn _foo() {
+///
+/// let test = preduce::interesting::And::new(
+///     // A relatively cheap check.
+///     preduce::interesting::NonEmpty,
+///     // An expensive check.
+///     preduce::interesting::Script::new("/path/to/expensive/script")
+/// );
+///
+/// # fn get_some_random_test_case() -> &'static ::std::path::Path { unimplemented!() }
+/// let test_case = get_some_random_test_case();
+/// if test.is_interesting(test_case).unwrap() {
+///     println!("Both is-interesting tests passed!");
+/// } else {
+///     println!("One or both is-interesting tests failed.");
+/// }
+/// # } }
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct And<T, U> {
+    first: T,
+    second: U,
+}
+
+impl<T, U> And<T, U> {
+    /// Combine `T` and `U` into a single `T && U` is-interesting test.
+    pub fn new(first: T, second: U) -> And<T, U> {
+        And {
+            first: first,
+            second: second,
+        }
+    }
+}
+
+impl<T, U> IsInteresting for And<T, U>
+    where T: IsInteresting,
+          U: IsInteresting
+{
+    fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
+        Ok(self.first.is_interesting(potential_reduction)? &&
+           self.second.is_interesting(potential_reduction)?)
+    }
+}
+
+/// Given two is-interesting tests, combine them into a single is-interesting
+/// test that returns `true` if either sub-test returns `true`.
+///
+/// ### Example
+///
+/// ```
+/// extern crate preduce;
+/// use preduce::traits::IsInteresting;
+/// # fn main() { fn _foo() {
+///
+/// let test = preduce::interesting::Or::new(
+///     preduce::interesting::Script::new("/path/to/first/script"),
+///     preduce::interesting::Script::new("/path/to/second/script")
+/// );
+///
+/// # fn get_some_random_test_case() -> &'static ::std::path::Path { unimplemented!() }
+/// let test_case = get_some_random_test_case();
+/// if test.is_interesting(test_case).unwrap() {
+///     // We know only one passed because we either short-circuited after the
+///     // first successful test and did not run the second one, or the first
+///     // failed and the second succeeded.
+///     println!("One of the is-interesting tests passed!");
+/// } else {
+///     println!("Both is-interesting tests failed.");
+/// }
+/// # } }
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Or<T, U> {
+    first: T,
+    second: U,
+}
+
+impl<T, U> Or<T, U> {
+    /// Combine `T` and `U` into a single `T || U` is-interesting test.
+    pub fn new(first: T, second: U) -> Or<T, U> {
+        Or {
+            first: first,
+            second: second,
+        }
+    }
+}
+
+impl<T, U> IsInteresting for Or<T, U>
+    where T: IsInteresting,
+          U: IsInteresting
+{
+    fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
+        Ok(self.first.is_interesting(potential_reduction)? ||
+           self.second.is_interesting(potential_reduction)?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate tempfile;
@@ -110,6 +220,24 @@ mod tests {
     use std::io::Write;
     use std::path;
     use super::*;
+
+    fn get_script(s: &str) -> path::PathBuf {
+        let mut script = path::PathBuf::new();
+        if let Ok(dir) = env::var("CARGO_MANIFEST_DIR") {
+            script.push(dir);
+        }
+        script.push("tests");
+        script.push(s);
+        script
+    }
+
+    fn get_exit_0() -> path::PathBuf {
+        get_script("exit_0.sh")
+    }
+
+    fn get_exit_1() -> path::PathBuf {
+        get_script("exit_1.sh")
+    }
 
     #[test]
     fn non_empty_file_is_interesting() {
@@ -128,26 +256,64 @@ mod tests {
 
     #[test]
     fn exit_zero_is_interesting() {
-        let mut script = path::PathBuf::new();
-        if let Ok(dir) = env::var("CARGO_MANIFEST_DIR") {
-            script.push(dir);
-        }
-        script.push("tests/exit_0.sh");
-
-        let test = Script::new(script);
+        let test = Script::new(get_exit_0());
         let test_case = tempfile::NamedTempFile::new().unwrap();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn exit_non_zero_is_not_interesting() {
-        let mut script = path::PathBuf::new();
-        if let Ok(dir) = env::var("CARGO_MANIFEST_DIR") {
-            script.push(dir);
-        }
-        script.push("tests/exit_1.sh");
+        let test = Script::new(get_exit_1());
+        let test_case = tempfile::NamedTempFile::new().unwrap();
+        assert!(!test.is_interesting(test_case.path()).unwrap());
+    }
 
-        let test = Script::new(script);
+    #[test]
+    fn and_both_true() {
+        let test = And::new(
+            Script::new(get_exit_0()),
+            Script::new(get_exit_0())
+        );
+        let test_case = tempfile::NamedTempFile::new().unwrap();
+        assert!(test.is_interesting(test_case.path()).unwrap());
+    }
+
+    #[test]
+    fn and_one_false() {
+        let test = And::new(
+            Script::new(get_exit_0()),
+            Script::new(get_exit_1())
+        );
+        let test_case = tempfile::NamedTempFile::new().unwrap();
+        assert!(!test.is_interesting(test_case.path()).unwrap());
+    }
+
+    #[test]
+    fn or_first_true() {
+        let test = Or::new(
+            Script::new(get_exit_0()),
+            Script::new(get_exit_1())
+        );
+        let test_case = tempfile::NamedTempFile::new().unwrap();
+        assert!(test.is_interesting(test_case.path()).unwrap());
+    }
+
+    #[test]
+    fn or_second_true() {
+        let test = Or::new(
+            Script::new(get_exit_1()),
+            Script::new(get_exit_0())
+        );
+        let test_case = tempfile::NamedTempFile::new().unwrap();
+        assert!(test.is_interesting(test_case.path()).unwrap());
+    }
+
+    #[test]
+    fn or_both_false() {
+        let test = Or::new(
+            Script::new(get_exit_1()),
+            Script::new(get_exit_1())
+        );
         let test_case = tempfile::NamedTempFile::new().unwrap();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
