@@ -1,0 +1,16 @@
+[package]
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+name = "preduce"
+version = "0.1.0"
+
+[[bin]]
+name = "preduce"
+path = "src/main.rs"
+
+[dependencies]
+
+[dev-dependencies]
+tempfile = "2.1.5"
+
+[lib]
+path = "src/lib.rs"
