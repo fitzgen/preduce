@@ -9,12 +9,18 @@ use std::io;
 pub enum Error {
     /// An IO error.
     Io(io::Error),
+
+    /// TODO FITZGEN
+    MisbehavingReducerScript(String),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error> {
         match *self {
-            Error::Io(ref e) => fmt::Display::fmt(e, f)
+            Error::Io(ref e) => fmt::Display::fmt(e, f),
+            Error::MisbehavingReducerScript(ref details) => {
+                write!(f, "Misbehaving reducer script: {}", details)
+            }
         }
     }
 }
@@ -22,7 +28,8 @@ impl fmt::Display for Error {
 impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            Error::Io(ref e) => error::Error::description(e)
+            Error::Io(ref e) => error::Error::description(e),
+            Error::MisbehavingReducerScript(_) => "Misbehaving reducer script",
         }
     }
 }

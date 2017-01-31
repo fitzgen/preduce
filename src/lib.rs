@@ -5,5 +5,8 @@
 
 pub mod error;
 pub mod interesting;
-pub mod reductions;
+pub mod reducers;
 pub mod traits;
+
+#[cfg(test)]
+mod test_utils;

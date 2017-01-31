@@ -224,28 +224,10 @@ impl<T> IsInteresting for T
 mod tests {
     extern crate tempfile;
 
-    use std::env;
     use std::io::Write;
     use std::path;
     use super::*;
-
-    fn get_script(s: &str) -> path::PathBuf {
-        let mut script = path::PathBuf::new();
-        if let Ok(dir) = env::var("CARGO_MANIFEST_DIR") {
-            script.push(dir);
-        }
-        script.push("tests");
-        script.push(s);
-        script
-    }
-
-    fn get_exit_0() -> path::PathBuf {
-        get_script("exit_0.sh")
-    }
-
-    fn get_exit_1() -> path::PathBuf {
-        get_script("exit_1.sh")
-    }
+    use test_utils::*;
 
     #[test]
     fn non_empty_file_is_interesting() {
