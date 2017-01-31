@@ -213,7 +213,7 @@ impl<T, U> IsInteresting for Or<T, U>
 }
 
 impl<T> IsInteresting for T
-    where T: for<'a> Fn(&'a path::Path) -> error::Result<bool>
+    where T: Send + for<'a> Fn(&'a path::Path) -> error::Result<bool>
 {
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
         (*self)(potential_reduction)

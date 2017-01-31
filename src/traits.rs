@@ -14,7 +14,7 @@ use std::path;
 /// * Etc...
 ///
 /// This is analogous to a "pass" in creduce.
-pub trait Reducer {
+pub trait Reducer: Send {
     /// Configure this reducer to use generate potential reductions from the
     /// given seed test case.
     fn set_seed(&mut self, seed: &path::Path);
@@ -40,7 +40,7 @@ pub trait Reducer {
 /// If a potential reduction is interesting, then it is a candidate for the
 /// current most-reduced test case, or a even a new further potential reduction
 /// by merging it with the current most-reduced test case.
-pub trait IsInteresting {
+pub trait IsInteresting: Send {
     /// Return `true` if the reduced test case is interesting, `false`
     /// otherwise.
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool>;
