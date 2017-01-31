@@ -143,7 +143,9 @@ impl Reducer for Script {
 
         let mut child_stdout = self.child_stdout.as_mut().unwrap();
         let mut path = String::new();
-        child_stdout.read_line(&mut path)?;
+        if let Err(_) = child_stdout.read_line(&mut path) {
+            return Ok(None);
+        }
 
         if path.len() == 0 {
             return Ok(None);
