@@ -265,6 +265,107 @@ impl<R> Reducer for Shuffle<R>
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ChainState {
+    /// Currently pulling from the first reducer. Second is queued up.
+    First,
+
+    /// We exhausted the first reducer, and are now pulling from the second.
+    Second,
+
+    /// We exhausted both reducers.
+    Done,
+}
+
+/// Generate reductions from `T`, followed by reductions from `U`.
+///
+/// The `Chain` reducer combinator concatenates all of `T`'s generated
+/// reductions with all of `U`s generated reductions. The resulting reductions
+/// will always be emitted in order, such that `T` is exhausted before `U` is
+/// first used.
+///
+/// ### Example
+///
+/// ```
+/// extern crate preduce;
+/// use preduce::traits::Reducer;
+///
+/// # fn main() { fn _foo() {
+/// let first = preduce::reducers::Script::new("/path/to/first/reducer/script");
+/// let second = preduce::reducers::Script::new("/path/to/second/reducer/script");
+/// let mut chained = preduce::reducers::Chain::new(first, second);
+///
+/// # let some_seed_test_case = || unimplemented!();
+/// # let some_out_dir = || unimplemented!();
+/// chained.set_seed(some_seed_test_case());
+/// chained.set_out_dir(some_out_dir());
+///
+/// while let Some(reduction) = chained.next_potential_reduction().unwrap() {
+///     println!("A potential reduction is {:?}", reduction);
+/// }
+/// # } }
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Chain<T, U> {
+    first: T,
+    second: U,
+    state: ChainState,
+}
+
+impl<T, U> Chain<T, U> {
+    /// Construct the concatenated `T · U` reducer.
+    pub fn new(first: T, second: U) -> Chain<T, U> {
+        Chain {
+            first: first,
+            second: second,
+            state: ChainState::First,
+        }
+    }
+}
+
+impl<T, U> Reducer for Chain<T, U>
+    where T: Reducer,
+          U: Reducer
+{
+    fn set_seed(&mut self, seed: &path::Path) {
+        self.first.set_seed(seed);
+        self.second.set_seed(seed);
+        self.state = ChainState::First;
+    }
+
+    fn set_out_dir(&mut self, out_dir: &path::Path) {
+        self.first.set_out_dir(out_dir);
+        self.second.set_out_dir(out_dir);
+        self.state = ChainState::First;
+    }
+
+    fn next_potential_reduction(&mut self) -> error::Result<Option<path::PathBuf>> {
+        match self.state {
+            ChainState::First => {
+                match self.first.next_potential_reduction() {
+                    Err(e) => Err(e),
+                    Ok(Some(reduction)) => Ok(Some(reduction)),
+                    Ok(None) => {
+                        self.state = ChainState::Second;
+                        self.next_potential_reduction()
+                    }
+                }
+            }
+            ChainState::Second => {
+                match self.second.next_potential_reduction() {
+                    Err(e) => Err(e),
+                    Ok(Some(reduction)) => Ok(Some(reduction)),
+                    Ok(None) => {
+                        self.state = ChainState::Done;
+                        Ok(None)
+                    }
+                }
+            }
+            ChainState::Done => Ok(None),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate tempdir;
@@ -332,5 +433,38 @@ mod tests {
         }
 
         assert!(found.iter().all(|&found| found));
+    }
+
+    #[test]
+    fn chain() {
+        env::set_var("PREDUCE_COUNTING_ITERATIONS", "6");
+        let first = Script::new(get_script("counting.sh"));
+        let second = Script::new(get_script("alphabet.sh"));
+        let mut reducer = Chain::new(first, second);
+
+        let seed = tempfile::NamedTempFile::new().unwrap();
+        reducer.set_seed(seed.path());
+
+        let tmpdir = tempdir::TempDir::new("shuffle").unwrap();
+        reducer.set_out_dir(tmpdir.path());
+
+        let mut next_file_name = || {
+            let reduction = reducer.next_potential_reduction().unwrap().unwrap();
+            reduction.file_name().unwrap().to_string_lossy().into_owned()
+        };
+
+        assert_eq!(next_file_name(), "counting-0");
+        assert_eq!(next_file_name(), "counting-1");
+        assert_eq!(next_file_name(), "counting-2");
+        assert_eq!(next_file_name(), "counting-3");
+        assert_eq!(next_file_name(), "counting-4");
+        assert_eq!(next_file_name(), "counting-5");
+
+        assert_eq!(next_file_name(), "alphabet-a");
+        assert_eq!(next_file_name(), "alphabet-b");
+        assert_eq!(next_file_name(), "alphabet-c");
+        assert_eq!(next_file_name(), "alphabet-d");
+        assert_eq!(next_file_name(), "alphabet-e");
+        assert_eq!(next_file_name(), "alphabet-f");
     }
 }
