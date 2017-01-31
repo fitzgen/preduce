@@ -391,6 +391,85 @@ impl<T, U> Reducer for Chain<T, U>
     }
 }
 
+/// A reducer which ends after the first `Ok(None)` or `Err`.
+///
+/// Analogous to
+/// [`std::iter::Iterator::fuse`](https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html#method.fuse).
+/// The `Fuse` combinator ensures that once a reducer has either yielded an
+/// error or signaled exhaustion, that it will always return `Ok(None)` forever
+/// after, until it is reconfigured with `set_seed` or `set_out_dir`.
+///
+/// ### Example
+///
+/// ```
+/// extern crate preduce;
+/// use preduce::traits::Reducer;
+///
+/// # fn main() { fn _foo() {
+/// let script = preduce::reducers::Script::new("/path/to/some/reducer/script");
+/// let mut fused = preduce::reducers::Fuse::new(script);
+///
+/// # let some_seed_test_case = || unimplemented!();
+/// # let some_out_dir = || unimplemented!();
+/// fused.set_seed(some_seed_test_case());
+/// fused.set_out_dir(some_out_dir());
+///
+/// while let Ok(Some(reduction)) = fused.next_potential_reduction() {
+///     println!("A potential reduction is {:?}", reduction);
+/// }
+///
+/// // This will always hold true until `fused` is reconfigured with `set_seed`
+/// // or `set_out_dir`.
+/// assert!(fused.next_potential_reduction().unwrap().is_none());
+/// assert!(fused.next_potential_reduction().unwrap().is_none());
+/// assert!(fused.next_potential_reduction().unwrap().is_none());
+/// # } }
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Fuse<R> {
+    reducer: R,
+    finished: bool,
+}
+
+impl<R> Fuse<R> {
+    /// Ensure that the given `reducer` ends after having emitted `Ok(None)` or
+    /// `Err`.
+    pub fn new(reducer: R) -> Fuse<R> {
+        Fuse {
+            reducer: reducer,
+            finished: false,
+        }
+    }
+}
+
+impl<R> Reducer for Fuse<R>
+    where R: Reducer
+{
+    fn set_seed(&mut self, seed: &path::Path) {
+        self.reducer.set_seed(seed);
+        self.finished = false;
+    }
+
+    fn set_out_dir(&mut self, out_dir: &path::Path) {
+        self.reducer.set_out_dir(out_dir);
+        self.finished = false;
+    }
+
+    fn next_potential_reduction(&mut self) -> error::Result<Option<path::PathBuf>> {
+        if self.finished {
+            return Ok(None);
+        }
+
+        match self.reducer.next_potential_reduction() {
+            result @ Ok(Some(_)) => result,
+            result @ Ok(None) | result @ Err(_) => {
+                self.finished = true;
+                result
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate tempdir;
@@ -491,5 +570,38 @@ mod tests {
         assert_eq!(next_file_name(), "alphabet-d");
         assert_eq!(next_file_name(), "alphabet-e");
         assert_eq!(next_file_name(), "alphabet-f");
+    }
+
+    #[test]
+    fn fuse() {
+        struct Erratic(usize);
+
+        impl Reducer for Erratic {
+            fn set_seed(&mut self, _: &path::Path) {}
+            fn set_out_dir(&mut self, _: &path::Path) {}
+
+            fn next_potential_reduction(&mut self) -> error::Result<Option<path::PathBuf>> {
+                let result = match self.0 % 3 {
+                    0 => Ok(Some(path::PathBuf::from("hello"))),
+                    1 => Ok(None),
+                    2 => Err(error::Error::MisbehavingReducerScript("TEST".into())),
+                    _ => unreachable!(),
+                };
+                self.0 += 1;
+                result
+            }
+        }
+
+        let mut reducer = Erratic(0);
+        assert!(reducer.next_potential_reduction().unwrap().is_some());
+        assert!(reducer.next_potential_reduction().unwrap().is_none());
+        assert!(reducer.next_potential_reduction().is_err());
+        assert!(reducer.next_potential_reduction().unwrap().is_some());
+
+        let mut reducer = Fuse::new(Erratic(0));
+        assert!(reducer.next_potential_reduction().unwrap().is_some());
+        assert!(reducer.next_potential_reduction().unwrap().is_none());
+        assert!(reducer.next_potential_reduction().unwrap().is_none());
+        assert!(reducer.next_potential_reduction().unwrap().is_none());
     }
 }
