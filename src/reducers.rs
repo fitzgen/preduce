@@ -52,6 +52,26 @@ use traits::Reducer;
 ///     echo "tail-$i"
 /// }
 /// ```
+///
+/// ### Example Rust Usage
+///
+/// ```
+/// extern crate preduce;
+/// use preduce::traits::Reducer;
+///
+/// # fn main() { fn _foo() {
+/// let mut script = preduce::reducers::Script::new("/path/to/reducer/script");
+///
+/// # let some_seed_test_case = || unimplemented!();
+/// # let some_out_dir = || unimplemented!();
+/// script.set_seed(some_seed_test_case());
+/// script.set_out_dir(some_out_dir());
+///
+/// while let Some(reduction) = script.next_potential_reduction().unwrap() {
+///     println!("A potential reduction is {:?}", reduction);
+/// }
+/// # } }
+/// ```
 #[derive(Debug)]
 pub struct Script {
     program: ffi::OsString,
@@ -208,9 +228,14 @@ impl Reducer for Script {
 ///
 /// // And then use `Shuffle` to randomly reorder its generated reductions in
 /// // batches of 100 at a time.
-/// let mut reducer = preduce::reducers::Shuffle::new(100, reducer);
+/// let mut shuffled = preduce::reducers::Shuffle::new(100, reducer);
 ///
-/// while let Some(reduction) = reducer.next_potential_reduction().unwrap() {
+/// # let some_seed_test_case = || unimplemented!();
+/// # let some_out_dir = || unimplemented!();
+/// shuffled.set_seed(some_seed_test_case());
+/// shuffled.set_out_dir(some_out_dir());
+///
+/// while let Some(reduction) = shuffled.next_potential_reduction().unwrap() {
 ///     println!("A potential reduction is {:?}", reduction);
 /// }
 /// # } }
