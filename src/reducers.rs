@@ -1,5 +1,7 @@
 //! Concrete implementations of `preduce::traits::Reducer`.
 
+extern crate rand;
+
 use error;
 use std::ffi;
 use std::io::{self, BufRead, Write};
@@ -181,31 +183,152 @@ impl Reducer for Script {
     }
 }
 
+/// Shuffle the order of the generated reductions from the reducer `R`.
+///
+/// Reducers generally tend to produce reductions starting at the beginning of
+/// the seed test case and then, as they are drained, generate reductions
+/// towards the end of the seed test case. This behavior can cause more merge
+/// conflicts than is otherwise necessary.
+///
+/// The `Shuffle` reducer combinator helps alleviate this issue: it eagerly
+/// generates potential reductions from its sub-reducer and then shuffles the
+/// reductions as `next_potential_reduction` is called.
+///
+/// ### Example
+///
+/// ```
+/// extern crate preduce;
+/// use preduce::traits::Reducer;
+///
+/// # fn main() { fn _foo() {
+/// // Take some extant reducer.
+/// let reducer = preduce::reducers::Script::new("/path/to/reducer/script");
+///
+/// // And then use `Shuffle` to randomly reorder its generated reductions in
+/// // batches of 100 at a time.
+/// let mut reducer = preduce::reducers::Shuffle::new(100, reducer);
+///
+/// while let Some(reduction) = reducer.next_potential_reduction().unwrap() {
+///     println!("A potential reduction is {:?}", reduction);
+/// }
+/// # } }
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Shuffle<R> {
+    reducer: R,
+    buffer: Vec<path::PathBuf>,
+}
+
+impl<R> Shuffle<R> {
+    /// Given a reducer `R`, shuffle its reductions in batches of `capacity` at
+    /// a time.
+    pub fn new(capacity: usize, reducer: R) -> Shuffle<R> {
+        assert!(capacity > 0);
+        Shuffle {
+            reducer: reducer,
+            buffer: Vec::with_capacity(capacity),
+        }
+    }
+}
+
+impl<R> Reducer for Shuffle<R>
+    where R: Reducer
+{
+    fn set_seed(&mut self, seed: &path::Path) {
+        self.buffer.clear();
+        self.reducer.set_seed(seed);
+    }
+
+    fn set_out_dir(&mut self, out_dir: &path::Path) {
+        self.buffer.clear();
+        self.reducer.set_out_dir(out_dir);
+    }
+
+    fn next_potential_reduction(&mut self) -> error::Result<Option<path::PathBuf>> {
+        if self.buffer.is_empty() {
+            for _ in 0..self.buffer.capacity() {
+                match self.reducer.next_potential_reduction() {
+                    Ok(None) => break,
+                    Ok(Some(path)) => self.buffer.push(path),
+                    Err(e) => return Err(e),
+                }
+            }
+
+            let capacity = self.buffer.capacity();
+            let shuffled = rand::sample(&mut rand::thread_rng(), self.buffer.drain(..), capacity);
+            self.buffer = shuffled;
+        }
+
+        Ok(self.buffer.pop())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate tempdir;
     extern crate tempfile;
 
+    use std::env;
     use super::*;
     use test_utils::*;
     use traits::Reducer;
 
     #[test]
-    fn script_generates_potential_reductions() {
+    fn script() {
+        env::set_var("PREDUCE_COUNTING_ITERATIONS", "6");
         let mut reducer = Script::new(get_script("counting.sh"));
 
         let seed = tempfile::NamedTempFile::new().unwrap();
         reducer.set_seed(seed.path());
 
-        let tmpdir = tempdir::TempDir::new("counting").unwrap();
+        let tmpdir = tempdir::TempDir::new("script").unwrap();
         reducer.set_out_dir(tmpdir.path());
 
-        for _ in 0..5 {
+        for _ in 0..6 {
             let path = reducer.next_potential_reduction();
             let path = path.unwrap().unwrap();
             assert!(path.is_file());
         }
 
         assert!(reducer.next_potential_reduction().unwrap().is_none());
+    }
+
+    #[test]
+    fn shuffle() {
+        env::set_var("PREDUCE_COUNTING_ITERATIONS", "6");
+        let reducer = Script::new(get_script("counting.sh"));
+        let mut reducer = Shuffle::new(3, reducer);
+
+        let seed = tempfile::NamedTempFile::new().unwrap();
+        reducer.set_seed(seed.path());
+
+        let tmpdir = tempdir::TempDir::new("shuffle").unwrap();
+        reducer.set_out_dir(tmpdir.path());
+
+        let mut found = [false; 6];
+
+        for _ in 0..3 {
+            let reduction = reducer.next_potential_reduction().unwrap().unwrap();
+            let file_name = reduction.file_name().map(|s| s.to_string_lossy().into_owned());
+            match file_name.as_ref().map(|s| &s[..]) {
+                Some("counting-0") => found[0] = true,
+                Some("counting-1") => found[1] = true,
+                Some("counting-2") => found[2] = true,
+                otherwise => panic!("Unexpected reduction: {:?}", otherwise),
+            }
+        }
+
+        for _ in 0..3 {
+            let reduction = reducer.next_potential_reduction().unwrap().unwrap();
+            let file_name = reduction.file_name().map(|s| s.to_string_lossy().into_owned());
+            match file_name.as_ref().map(|s| &s[..]) {
+                Some("counting-3") => found[3] = true,
+                Some("counting-4") => found[4] = true,
+                Some("counting-5") => found[5] = true,
+                otherwise => panic!("Unexpected reduction: {:?}", otherwise),
+            }
+        }
+
+        assert!(found.iter().all(|&found| found));
     }
 }
