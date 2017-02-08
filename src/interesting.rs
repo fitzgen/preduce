@@ -14,7 +14,8 @@ pub struct NonEmpty;
 
 impl IsInteresting for NonEmpty {
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
-        let len = fs::File::open(potential_reduction)?
+        let len = fs::File::open(potential_reduction)
+            ?
             .metadata()?
             .len();
         Ok(len != 0)
@@ -74,10 +75,10 @@ pub struct Script {
 
 impl Script {
     /// Construct a new `Script` is-interesting test that runs the given program.
-    pub fn new<S>(program: S) -> Script where S: Into<ffi::OsString> {
-        Script {
-            program: program.into(),
-        }
+    pub fn new<S>(program: S) -> Script
+        where S: Into<ffi::OsString>
+    {
+        Script { program: program.into() }
     }
 }
 
@@ -224,9 +225,9 @@ impl<T> IsInteresting for T
 mod tests {
     extern crate tempfile;
 
+    use super::*;
     use std::io::Write;
     use std::path;
-    use super::*;
     use test_utils::*;
 
     #[test]
@@ -260,50 +261,35 @@ mod tests {
 
     #[test]
     fn and_both_true() {
-        let test = And::new(
-            Script::new(get_exit_0()),
-            Script::new(get_exit_0())
-        );
+        let test = And::new(Script::new(get_exit_0()), Script::new(get_exit_0()));
         let test_case = tempfile::NamedTempFile::new().unwrap();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn and_one_false() {
-        let test = And::new(
-            Script::new(get_exit_0()),
-            Script::new(get_exit_1())
-        );
+        let test = And::new(Script::new(get_exit_0()), Script::new(get_exit_1()));
         let test_case = tempfile::NamedTempFile::new().unwrap();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_first_true() {
-        let test = Or::new(
-            Script::new(get_exit_0()),
-            Script::new(get_exit_1())
-        );
+        let test = Or::new(Script::new(get_exit_0()), Script::new(get_exit_1()));
         let test_case = tempfile::NamedTempFile::new().unwrap();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_second_true() {
-        let test = Or::new(
-            Script::new(get_exit_1()),
-            Script::new(get_exit_0())
-        );
+        let test = Or::new(Script::new(get_exit_1()), Script::new(get_exit_0()));
         let test_case = tempfile::NamedTempFile::new().unwrap();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_both_false() {
-        let test = Or::new(
-            Script::new(get_exit_1()),
-            Script::new(get_exit_1())
-        );
+        let test = Or::new(Script::new(get_exit_1()), Script::new(get_exit_1()));
         let test_case = tempfile::NamedTempFile::new().unwrap();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }

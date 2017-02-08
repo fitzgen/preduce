@@ -20,4 +20,3 @@ pub fn get_exit_0() -> path::PathBuf {
 pub fn get_exit_1() -> path::PathBuf {
     get_script("exit_1.sh")
 }
-

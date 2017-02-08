@@ -62,4 +62,3 @@ mod tests {
         fn take_is_interesting_by_trait_object(_: &IsInteresting) {}
     }
 }
-

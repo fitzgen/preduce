@@ -462,7 +462,8 @@ impl<R> Reducer for Fuse<R>
 
         match self.reducer.next_potential_reduction() {
             result @ Ok(Some(_)) => result,
-            result @ Ok(None) | result @ Err(_) => {
+            result @ Ok(None) |
+            result @ Err(_) => {
                 self.finished = true;
                 result
             }
@@ -475,8 +476,8 @@ mod tests {
     extern crate tempdir;
     extern crate tempfile;
 
-    use std::env;
     use super::*;
+    use std::env;
     use test_utils::*;
     use traits::Reducer;
 
