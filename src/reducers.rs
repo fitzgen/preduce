@@ -149,7 +149,7 @@ impl Reducer for Script {
 
     fn next_potential_reduction(&mut self) -> error::Result<Option<path::PathBuf>> {
         assert!(self.seed.is_some() && self.out_dir.is_some(),
-                "Must be initialized with calls to set_{seed,out_dir} before \
+                "Must be initialized with calls to set_seed/set_out_dir before \
                  asking for potential reductions");
 
         if self.child.is_none() {
@@ -163,11 +163,11 @@ impl Reducer for Script {
 
         let mut child_stdout = self.child_stdout.as_mut().unwrap();
         let mut path = String::new();
-        if let Err(_) = child_stdout.read_line(&mut path) {
+        if child_stdout.read_line(&mut path).is_err() {
             return Ok(None);
         }
 
-        if path.len() == 0 {
+        if path.is_empty() {
             return Ok(None);
         }
 
@@ -393,11 +393,12 @@ impl<T, U> Reducer for Chain<T, U>
 
 /// A reducer which ends after the first `Ok(None)` or `Err`.
 ///
-/// Analogous to
-/// [`std::iter::Iterator::fuse`](https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html#method.fuse).
-/// The `Fuse` combinator ensures that once a reducer has either yielded an
-/// error or signaled exhaustion, that it will always return `Ok(None)` forever
-/// after, until it is reconfigured with `set_seed` or `set_out_dir`.
+/// Analogous to [`std::iter::Iterator::fuse`][iterfuse]. The `Fuse` combinator
+/// ensures that once a reducer has either yielded an error or signaled
+/// exhaustion, that it will always return `Ok(None)` forever after, until it is
+/// reconfigured with `set_seed` or `set_out_dir`.
+///
+/// [iterfuse]: https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html#method.fuse
 ///
 /// ### Example
 ///
