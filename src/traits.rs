@@ -2,6 +2,7 @@
 
 use error;
 use std::path;
+use test_case;
 
 /// A reducer generates potential reductions of an initial seed test case.
 ///
@@ -17,11 +18,7 @@ use std::path;
 pub trait Reducer: Send {
     /// Configure this reducer to use generate potential reductions from the
     /// given seed test case.
-    fn set_seed(&mut self, seed: &path::Path);
-
-    /// Configure this reducer to use generate potential reductions into the
-    /// given out directory.
-    fn set_out_dir(&mut self, out_dir: &path::Path);
+    fn set_seed(&mut self, seed: test_case::Interesting);
 
     /// Generate the next potential reduction of the seeded test case at the
     /// given destination path.
@@ -29,7 +26,7 @@ pub trait Reducer: Send {
     /// This method should return `Some(path_to_potential_reduction)` if it
     /// generated a potential reduction of the test case, or `None` if it has
     /// exhausted all of its potential reductions.
-    fn next_potential_reduction(&mut self) -> error::Result<Option<path::PathBuf>>;
+    fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>>;
 }
 
 /// Is a potential reduction interesting?
@@ -40,6 +37,8 @@ pub trait Reducer: Send {
 /// If a potential reduction is interesting, then it is a candidate for the
 /// current most-reduced test case, or a even a new further potential reduction
 /// by merging it with the current most-reduced test case.
+///
+/// An is-interesting test should be deterministic and idempotent.
 pub trait IsInteresting: Send {
     /// Return `true` if the reduced test case is interesting, `false`
     /// otherwise.

@@ -7,6 +7,8 @@ use std::ffi;
 use std::io::{self, BufRead, Write};
 use std::path;
 use std::process;
+use tempdir;
+use test_case::{self, TestCaseMethods};
 use traits::Reducer;
 
 /// A test case reducer that is implemented as an external script.
@@ -63,9 +65,7 @@ use traits::Reducer;
 /// let mut script = preduce::reducers::Script::new("/path/to/reducer/script");
 ///
 /// # let some_seed_test_case = || unimplemented!();
-/// # let some_out_dir = || unimplemented!();
 /// script.set_seed(some_seed_test_case());
-/// script.set_out_dir(some_out_dir());
 ///
 /// while let Some(reduction) = script.next_potential_reduction().unwrap() {
 ///     println!("A potential reduction is {:?}", reduction);
@@ -75,8 +75,8 @@ use traits::Reducer;
 #[derive(Debug)]
 pub struct Script {
     program: ffi::OsString,
-    seed: Option<path::PathBuf>,
-    out_dir: Option<path::PathBuf>,
+    seed: Option<test_case::Interesting>,
+    out_dir: Option<tempdir::TempDir>,
     child: Option<process::Child>,
     child_stdout: Option<io::BufReader<process::ChildStdout>>,
 }
@@ -96,12 +96,14 @@ impl Script {
     }
 
     fn spawn_child(&mut self) -> error::Result<()> {
-        assert!(self.seed.is_some() && self.out_dir.is_some());
-        assert!(self.child.is_none() && self.child_stdout.is_none());
+        assert!(self.seed.is_some());
+        assert!(self.out_dir.is_none() && self.child.is_none() && self.child_stdout.is_none());
+
+        self.out_dir = Some(tempdir::TempDir::new("preduce-reduction-script")?);
 
         let mut cmd = process::Command::new(&self.program);
-        cmd.current_dir(self.out_dir.as_ref().unwrap())
-            .arg(self.seed.as_ref().unwrap())
+        cmd.current_dir(self.out_dir.as_ref().unwrap().path())
+            .arg(self.seed.as_ref().unwrap().path())
             .stdin(process::Stdio::piped())
             .stdout(process::Stdio::piped())
             .stderr(process::Stdio::null());
@@ -115,10 +117,11 @@ impl Script {
     }
 
     fn kill_child(&mut self) {
-        self.child_stdout = None;
         if let Some(mut child) = self.child.take() {
             let _ = child.kill();
         }
+        self.child_stdout = None;
+        self.out_dir = None;
     }
 }
 
@@ -129,9 +132,8 @@ impl Drop for Script {
 }
 
 impl Reducer for Script {
-    fn set_seed(&mut self, seed: &path::Path) {
-        assert!(seed.is_file());
-        self.seed = Some(seed.into());
+    fn set_seed(&mut self, seed: test_case::Interesting) {
+        self.seed = Some(seed);
 
         // If we have an extant child process, kill it now. We'll start a new
         // child process with the new seed the next time
@@ -139,28 +141,23 @@ impl Reducer for Script {
         self.kill_child();
     }
 
-    fn set_out_dir(&mut self, out_dir: &path::Path) {
-        assert!(out_dir.is_dir());
-        self.out_dir = Some(out_dir.into());
-
-        // Same as with `set_seed`.
-        self.kill_child();
-    }
-
-    fn next_potential_reduction(&mut self) -> error::Result<Option<path::PathBuf>> {
-        assert!(self.seed.is_some() && self.out_dir.is_some(),
-                "Must be initialized with calls to set_seed/set_out_dir before \
-                 asking for potential reductions");
+    fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
+        assert!(self.seed.is_some(),
+                "Must be initialized with calls to set_seed before asking for potential \
+                 reductions");
 
         if self.child.is_none() {
             self.spawn_child()?;
         }
 
-        assert!(self.child.is_some() && self.child_stdout.is_some());
+        assert!(self.child.is_some() && self.child_stdout.is_some() && self.out_dir.is_some());
 
+        // Write a newline to the child's stdin.
         let mut child = self.child.as_mut().unwrap();
         write!(child.stdin.as_mut().unwrap(), "\n")?;
 
+        // Read the path of the next potential reduction from the child's
+        // stdout.
         let mut child_stdout = self.child_stdout.as_mut().unwrap();
         let mut path = String::new();
         if child_stdout.read_line(&mut path).is_err() {
@@ -180,9 +177,12 @@ impl Reducer for Script {
 
         let path: path::PathBuf = path.into();
         let path = if path.is_relative() {
-            let mut abs = self.out_dir.clone().unwrap();
-            abs.push(path);
-            abs.canonicalize()?
+            self.out_dir
+                .as_ref()
+                .unwrap()
+                .path()
+                .join(path)
+                .canonicalize()?
         } else {
             path.canonicalize()?
         };
@@ -201,7 +201,10 @@ impl Reducer for Script {
             return Err(error::Error::MisbehavingReducerScript(details));
         }
 
-        Ok(Some(path))
+        let reduction = test_case::PotentialReduction::new(self.seed.clone().unwrap(),
+                                                           self.program.to_string_lossy(),
+                                                           path)?;
+        Ok(Some(reduction))
     }
 }
 
@@ -233,7 +236,6 @@ impl Reducer for Script {
 /// # let some_seed_test_case = || unimplemented!();
 /// # let some_out_dir = || unimplemented!();
 /// shuffled.set_seed(some_seed_test_case());
-/// shuffled.set_out_dir(some_out_dir());
 ///
 /// while let Some(reduction) = shuffled.next_potential_reduction().unwrap() {
 ///     println!("A potential reduction is {:?}", reduction);
@@ -243,7 +245,7 @@ impl Reducer for Script {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Shuffle<R> {
     reducer: R,
-    buffer: Vec<path::PathBuf>,
+    buffer: Vec<test_case::PotentialReduction>,
 }
 
 impl<R> Shuffle<R> {
@@ -261,17 +263,12 @@ impl<R> Shuffle<R> {
 impl<R> Reducer for Shuffle<R>
     where R: Reducer
 {
-    fn set_seed(&mut self, seed: &path::Path) {
+    fn set_seed(&mut self, seed: test_case::Interesting) {
         self.buffer.clear();
         self.reducer.set_seed(seed);
     }
 
-    fn set_out_dir(&mut self, out_dir: &path::Path) {
-        self.buffer.clear();
-        self.reducer.set_out_dir(out_dir);
-    }
-
-    fn next_potential_reduction(&mut self) -> error::Result<Option<path::PathBuf>> {
+    fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
         if self.buffer.is_empty() {
             for _ in 0..self.buffer.capacity() {
                 match self.reducer.next_potential_reduction() {
@@ -323,7 +320,6 @@ enum ChainState {
 /// # let some_seed_test_case = || unimplemented!();
 /// # let some_out_dir = || unimplemented!();
 /// chained.set_seed(some_seed_test_case());
-/// chained.set_out_dir(some_out_dir());
 ///
 /// while let Some(reduction) = chained.next_potential_reduction().unwrap() {
 ///     println!("A potential reduction is {:?}", reduction);
@@ -352,19 +348,13 @@ impl<T, U> Reducer for Chain<T, U>
     where T: Reducer,
           U: Reducer
 {
-    fn set_seed(&mut self, seed: &path::Path) {
-        self.first.set_seed(seed);
+    fn set_seed(&mut self, seed: test_case::Interesting) {
+        self.first.set_seed(seed.clone());
         self.second.set_seed(seed);
         self.state = ChainState::First;
     }
 
-    fn set_out_dir(&mut self, out_dir: &path::Path) {
-        self.first.set_out_dir(out_dir);
-        self.second.set_out_dir(out_dir);
-        self.state = ChainState::First;
-    }
-
-    fn next_potential_reduction(&mut self) -> error::Result<Option<path::PathBuf>> {
+    fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
         match self.state {
             ChainState::First => {
                 match self.first.next_potential_reduction() {
@@ -396,7 +386,7 @@ impl<T, U> Reducer for Chain<T, U>
 /// Analogous to [`std::iter::Iterator::fuse`][iterfuse]. The `Fuse` combinator
 /// ensures that once a reducer has either yielded an error or signaled
 /// exhaustion, that it will always return `Ok(None)` forever after, until it is
-/// reconfigured with `set_seed` or `set_out_dir`.
+/// reconfigured with `set_seed`.
 ///
 /// [iterfuse]: https://doc.rust-lang.org/nightly/std/iter/trait.Iterator.html#method.fuse
 ///
@@ -413,14 +403,12 @@ impl<T, U> Reducer for Chain<T, U>
 /// # let some_seed_test_case = || unimplemented!();
 /// # let some_out_dir = || unimplemented!();
 /// fused.set_seed(some_seed_test_case());
-/// fused.set_out_dir(some_out_dir());
 ///
 /// while let Ok(Some(reduction)) = fused.next_potential_reduction() {
 ///     println!("A potential reduction is {:?}", reduction);
 /// }
 ///
-/// // This will always hold true until `fused` is reconfigured with `set_seed`
-/// // or `set_out_dir`.
+/// // This will always hold true until `fused` is reconfigured with `set_seed`.
 /// assert!(fused.next_potential_reduction().unwrap().is_none());
 /// assert!(fused.next_potential_reduction().unwrap().is_none());
 /// assert!(fused.next_potential_reduction().unwrap().is_none());
@@ -446,17 +434,12 @@ impl<R> Fuse<R> {
 impl<R> Reducer for Fuse<R>
     where R: Reducer
 {
-    fn set_seed(&mut self, seed: &path::Path) {
+    fn set_seed(&mut self, seed: test_case::Interesting) {
         self.reducer.set_seed(seed);
         self.finished = false;
     }
 
-    fn set_out_dir(&mut self, out_dir: &path::Path) {
-        self.reducer.set_out_dir(out_dir);
-        self.finished = false;
-    }
-
-    fn next_potential_reduction(&mut self) -> error::Result<Option<path::PathBuf>> {
+    fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
         if self.finished {
             return Ok(None);
         }
@@ -479,6 +462,7 @@ mod tests {
 
     use super::*;
     use std::env;
+    use test_case;
     use test_utils::*;
     use traits::Reducer;
 
@@ -488,15 +472,12 @@ mod tests {
         let mut reducer = Script::new(get_script("counting.sh"));
 
         let seed = tempfile::NamedTempFile::new().unwrap();
-        reducer.set_seed(seed.path());
-
-        let tmpdir = tempdir::TempDir::new("script").unwrap();
-        reducer.set_out_dir(tmpdir.path());
+        let seed = test_case::Interesting::testing_only_new(seed.path());
+        reducer.set_seed(seed);
 
         for _ in 0..6 {
-            let path = reducer.next_potential_reduction();
-            let path = path.unwrap().unwrap();
-            assert!(path.is_file());
+            let reduction = reducer.next_potential_reduction().unwrap().unwrap();
+            assert!(reduction.path().is_file());
         }
 
         assert!(reducer.next_potential_reduction().unwrap().is_none());
@@ -509,16 +490,14 @@ mod tests {
         let mut reducer = Shuffle::new(3, reducer);
 
         let seed = tempfile::NamedTempFile::new().unwrap();
-        reducer.set_seed(seed.path());
-
-        let tmpdir = tempdir::TempDir::new("shuffle").unwrap();
-        reducer.set_out_dir(tmpdir.path());
+        let seed = test_case::Interesting::testing_only_new(seed.path());
+        reducer.set_seed(seed);
 
         let mut found = [false; 6];
 
         for _ in 0..3 {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
-            let file_name = reduction.file_name().map(|s| s.to_string_lossy().into_owned());
+            let file_name = reduction.path().file_name().map(|s| s.to_string_lossy().into_owned());
             match file_name.as_ref().map(|s| &s[..]) {
                 Some("counting-0") => found[0] = true,
                 Some("counting-1") => found[1] = true,
@@ -529,7 +508,7 @@ mod tests {
 
         for _ in 0..3 {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
-            let file_name = reduction.file_name().map(|s| s.to_string_lossy().into_owned());
+            let file_name = reduction.path().file_name().map(|s| s.to_string_lossy().into_owned());
             match file_name.as_ref().map(|s| &s[..]) {
                 Some("counting-3") => found[3] = true,
                 Some("counting-4") => found[4] = true,
@@ -549,14 +528,12 @@ mod tests {
         let mut reducer = Chain::new(first, second);
 
         let seed = tempfile::NamedTempFile::new().unwrap();
-        reducer.set_seed(seed.path());
-
-        let tmpdir = tempdir::TempDir::new("shuffle").unwrap();
-        reducer.set_out_dir(tmpdir.path());
+        let seed = test_case::Interesting::testing_only_new(seed.path());
+        reducer.set_seed(seed);
 
         let mut next_file_name = || {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
-            reduction.file_name().unwrap().to_string_lossy().into_owned()
+            reduction.path().file_name().unwrap().to_string_lossy().into_owned()
         };
 
         assert_eq!(next_file_name(), "counting-0");
@@ -579,12 +556,12 @@ mod tests {
         struct Erratic(usize);
 
         impl Reducer for Erratic {
-            fn set_seed(&mut self, _: &path::Path) {}
-            fn set_out_dir(&mut self, _: &path::Path) {}
+            fn set_seed(&mut self, _: test_case::Interesting) {}
 
-            fn next_potential_reduction(&mut self) -> error::Result<Option<path::PathBuf>> {
+            fn next_potential_reduction(&mut self)
+                                        -> error::Result<Option<test_case::PotentialReduction>> {
                 let result = match self.0 % 3 {
-                    0 => Ok(Some(path::PathBuf::from("hello"))),
+                    0 => Ok(Some(test_case::PotentialReduction::testing_only_new("hello"))),
                     1 => Ok(None),
                     2 => Err(error::Error::MisbehavingReducerScript("TEST".into())),
                     _ => unreachable!(),
