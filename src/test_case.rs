@@ -109,12 +109,10 @@ impl PotentialReduction {
         let msg = self.make_commit_message();
         let commit_id = repo.commit_test_case(&msg)?;
 
-        let result: Result<_, error::Error> = Ok(Some(Interesting {
+        Ok(Some(Interesting {
             kind: InterestingKind::Reduction(self),
             commit_id: commit_id,
-        }));
-
-        result
+        }))
     }
 }
 
@@ -162,15 +160,13 @@ impl Interesting {
         let msg = format!("Initial - {} - {}", size, file_path.as_ref().display());
         let commit_id = repo.commit_test_case(&msg)?;
 
-        let result: Result<_, error::Error> = Ok(Some(Interesting {
+        Ok(Some(Interesting {
             kind: InterestingKind::Initial(InitialInteresting {
                 path: repo_test_case_path,
                 size: size,
             }),
             commit_id: commit_id,
-        }));
-
-        result
+        }))
     }
 
     /// Get the commit id of this interesting test case.

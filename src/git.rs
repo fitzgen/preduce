@@ -22,10 +22,10 @@ pub trait RepoExt {
     fn head_id(&self) -> error::Result<git2::Oid>;
 
     /// Get the commit for HEAD.
-    fn head_commit<'a>(&'a self) -> error::Result<git2::Commit<'a>>;
+    fn head_commit(&self) -> error::Result<git2::Commit>;
 
     /// Get the tree for HEAD.
-    fn head_tree<'a>(&'a self) -> error::Result<git2::Tree<'a>>;
+    fn head_tree(&self) -> error::Result<git2::Tree>;
 
     /// Stage the test case and commit it.
     fn commit_test_case(&self, msg: &str) -> error::Result<git2::Oid>;
@@ -42,13 +42,13 @@ impl RepoExt for git2::Repository {
             .ok_or_else(|| git2::Error::from_str("HEAD reference has no target Oid").into())
     }
 
-    fn head_commit<'a>(&'a self) -> error::Result<git2::Commit<'a>> {
+    fn head_commit(&self) -> error::Result<git2::Commit> {
         let head = self.head_id()?;
         let head = self.find_commit(head)?;
         Ok(head)
     }
 
-    fn head_tree<'a>(&'a self) -> error::Result<git2::Tree<'a>> {
+    fn head_tree(&self) -> error::Result<git2::Tree> {
         let tree = self.head_commit()?.tree()?;
         Ok(tree)
     }
