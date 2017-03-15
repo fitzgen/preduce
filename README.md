@@ -438,6 +438,13 @@ Maybe there is some more clever property of the lattice we can exploit to
 discover a *maximal enough* reduction set in much faster time, or with much
 better parallelism. If you have ideas, please let me know!
 
+The frustration with this lattice perspective of the problem is that our
+is-interesting predicate function *f* itself is not guaranteed to be
+monotone. That is, it is possible that there is some interesting reduction set
+that is not reachable starting from the empty reduction set. This means that the
+combination of the reductions power set lattice with *f* is not itself a
+lattice.
+
 ## Why Not Merge `preduce` with C-Reduce?
 
 > Since `preduce` already shares much of its design with C-Reduce, and only
