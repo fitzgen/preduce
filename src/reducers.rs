@@ -102,8 +102,14 @@ impl Script {
         self.out_dir = Some(tempdir::TempDir::new("preduce-reduction-script")?);
 
         let mut cmd = process::Command::new(&self.program);
-        cmd.current_dir(self.out_dir.as_ref().unwrap().path())
-            .arg(self.seed.as_ref().unwrap().path())
+        cmd.current_dir(self.out_dir
+                             .as_ref()
+                             .unwrap()
+                             .path())
+            .arg(self.seed
+                     .as_ref()
+                     .unwrap()
+                     .path())
             .stdin(process::Stdio::piped())
             .stdout(process::Stdio::piped())
             .stderr(process::Stdio::null());
@@ -533,7 +539,11 @@ mod tests {
 
         let mut next_file_name = || {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
-            reduction.path().file_name().unwrap().to_string_lossy().into_owned()
+            reduction.path()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
         };
 
         assert_eq!(next_file_name(), "counting-0");

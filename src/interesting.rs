@@ -99,7 +99,9 @@ impl IsInteresting for Script {
             }
         }
 
-        Ok(cmd.spawn()?.wait()?.success())
+        Ok(cmd.spawn()?
+               .wait()?
+               .success())
     }
 }
 

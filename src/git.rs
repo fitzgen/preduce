@@ -49,7 +49,8 @@ impl RepoExt for git2::Repository {
     }
 
     fn head_tree(&self) -> error::Result<git2::Tree> {
-        let tree = self.head_commit()?.tree()?;
+        let tree = self.head_commit()?
+            .tree()?;
         Ok(tree)
     }
 
@@ -67,9 +68,9 @@ impl RepoExt for git2::Repository {
 
     fn test_case_path(&self) -> error::Result<path::PathBuf> {
         Ok(self.path()
-            .canonicalize()?
-            .parent()
-            .expect(".git/ folder should always be within the root of the repo")
-            .join(TEST_CASE_FILE_NAME))
+               .canonicalize()?
+               .parent()
+               .expect(".git/ folder should always be within the root of the repo")
+               .join(TEST_CASE_FILE_NAME))
     }
 }

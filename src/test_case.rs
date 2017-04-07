@@ -73,11 +73,11 @@ impl PotentialReduction {
         let size = fs::metadata(&path)?.len();
 
         Ok(PotentialReduction {
-            provenance: provenance,
-            parent: seed.commit_id(),
-            path: path,
-            size: size,
-        })
+               provenance: provenance,
+               parent: seed.commit_id(),
+               path: path,
+               size: size,
+           })
     }
 
     fn make_commit_message(&self) -> String {
@@ -110,9 +110,9 @@ impl PotentialReduction {
         let commit_id = repo.commit_test_case(&msg)?;
 
         Ok(Some(Interesting {
-            kind: InterestingKind::Reduction(self),
-            commit_id: commit_id,
-        }))
+                    kind: InterestingKind::Reduction(self),
+                    commit_id: commit_id,
+                }))
     }
 }
 
@@ -161,12 +161,12 @@ impl Interesting {
         let commit_id = repo.commit_test_case(&msg)?;
 
         Ok(Some(Interesting {
-            kind: InterestingKind::Initial(InitialInteresting {
-                path: repo_test_case_path,
-                size: size,
-            }),
-            commit_id: commit_id,
-        }))
+                    kind: InterestingKind::Initial(InitialInteresting {
+                                                       path: repo_test_case_path,
+                                                       size: size,
+                                                   }),
+                    commit_id: commit_id,
+                }))
     }
 
     /// Get the commit id of this interesting test case.
@@ -244,9 +244,9 @@ impl Interesting {
     {
         Interesting {
             kind: InterestingKind::Initial(InitialInteresting {
-                path: path.as_ref().into(),
-                size: 0,
-            }),
+                                               path: path.as_ref().into(),
+                                               size: 0,
+                                           }),
             commit_id: git2::Oid::from_bytes(&[0; 20]).unwrap(),
         }
     }
@@ -283,12 +283,11 @@ mod tests {
                    repo.test_case_path().unwrap(),
                    "The repo path should become the canonical test case path");
 
-        let mut file = fs::File::open(interesting.path())
-            .expect("The repo test case path should have a file");
+        let mut file =
+            fs::File::open(interesting.path()).expect("The repo test case path should have a file");
 
         let mut contents = String::new();
-        file.read_to_string(&mut contents)
-            .expect("And we should read from that file");
+        file.read_to_string(&mut contents).expect("And we should read from that file");
         assert_eq!(contents,
                    "la la la la la\n",
                    "And it should have the expected contents");
@@ -357,8 +356,7 @@ mod tests {
         let mut file = fs::File::open(interesting_reduction.path())
             .expect("The repo test case path should have a file");
         let mut contents = String::new();
-        file.read_to_string(&mut contents)
-            .expect("And we should read from that file");
+        file.read_to_string(&mut contents).expect("And we should read from that file");
         assert_eq!(contents, "la\n", "And it should have the expected contents");
 
         assert_eq!(interesting_reduction.size(),

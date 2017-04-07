@@ -43,13 +43,11 @@ impl<'a> TestRepo<'a> {
 
         {
             let test_case_path = repo.test_case_path().expect("should get test case path");
-            let file = fs::File::create(&test_case_path)
-                .expect("should create test case file in repo");
-            file.sync_all()
-                .expect("should sync file to disk");
+            let file =
+                fs::File::create(&test_case_path).expect("should create test case file in repo");
+            file.sync_all().expect("should sync file to disk");
 
-            let mut index = repo.index()
-                .expect("should get repo's index");
+            let mut index = repo.index().expect("should get repo's index");
             index.add_path(path::Path::new(test_case_path.file_name().unwrap()))
                 .expect("should add test case to index");
 
@@ -57,11 +55,10 @@ impl<'a> TestRepo<'a> {
                 .expect("should create tree builder")
                 .write()
                 .expect("should write tree to disk");
-            let tree = repo.find_tree(tree)
-                .expect("should get tree from repo");
+            let tree = repo.find_tree(tree).expect("should get tree from repo");
 
-            let sig = git2::Signature::now("test", "test@test.com")
-                .expect("should make new signature");
+            let sig =
+                git2::Signature::now("test", "test@test.com").expect("should make new signature");
 
             repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])
                 .expect("should make initial commit");
