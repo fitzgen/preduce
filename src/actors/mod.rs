@@ -1,4 +1,4 @@
-//! TODO FITZGEN
+//! Actors that orchestrate and perform the reduction search.
 
 mod logger;
 mod supervisor;

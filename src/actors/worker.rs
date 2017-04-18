@@ -1,4 +1,5 @@
-//! TODO FITZGEN
+//! The worker actor pulls potentially interesting test cases from the
+//! supervisor and tests them for interestingness.
 
 use super::{Logger, Supervisor};
 use std::fmt;
@@ -21,19 +22,20 @@ impl fmt::Display for WorkerId {
     }
 }
 
-/// TODO FITZGEN
+/// Messages that can be sent to worker actors.
 #[derive(Debug)]
-pub enum WorkerMessage {
+enum WorkerMessage {
 }
 
-/// TODO FITZGEN
+/// A client handle to a worker actor.
+#[derive(Clone, Debug)]
 pub struct Worker {
     sender: mpsc::Sender<WorkerMessage>,
 }
 
 /// Worker client API.
 impl Worker {
-    /// TODO FITZGEN
+    /// Spawn a new worker actor.
     pub fn spawn(id: WorkerId, supervisor: Supervisor, logger: Logger) -> Self {
         logger.spawning_worker(id);
 

@@ -1,6 +1,7 @@
-//! TODO FITZGEN
+//! The supervisor actor manages workers, and brokers their access to new
+//! reductions.
 
-use super::{Logger, Worker, WorkerId, WorkerMessage};
+use super::{Logger, Worker, WorkerId};
 use super::super::Options;
 use error;
 use std::fs;
@@ -10,14 +11,13 @@ use std::sync::mpsc;
 use std::thread;
 use traits;
 
-/// TODO FITZGEN
+/// The messages that can be sent to the supervisor actor.
 #[derive(Debug)]
-pub enum SupervisorMessage {
-    /// TODO FITZGEN
-    RequestNextReduction(mpsc::Sender<WorkerMessage>),
+enum SupervisorMessage {
+    RequestNextReduction(Worker),
 }
 
-/// TODO FITZGEN
+/// A client handle to the supervisor actor.
 #[derive(Clone, Debug)]
 pub struct Supervisor {
     sender: mpsc::Sender<SupervisorMessage>,

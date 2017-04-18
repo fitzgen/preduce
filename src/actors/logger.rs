@@ -1,4 +1,4 @@
-//! TODO FITZGEN
+//! The logger actor receives log messages and writes them to a log file.
 
 use super::WorkerId;
 use std::fmt;
@@ -7,9 +7,9 @@ use std::path;
 use std::sync::mpsc;
 use std::thread;
 
-/// TODO FITZGEN
+/// The different kinds of log messages that can be sent to the logger actor.
 #[derive(Debug)]
-pub enum LoggerMessage {
+enum LoggerMessage {
     SpawningWorker(WorkerId),
     SpawnedWorker(WorkerId),
     BackingUpTestCase(String, String),
@@ -27,7 +27,7 @@ impl fmt::Display for LoggerMessage {
     }
 }
 
-/// TODO FITZGEN
+/// A client to the logger actor.
 #[derive(Clone, Debug)]
 pub struct Logger {
     sender: mpsc::Sender<LoggerMessage>,
