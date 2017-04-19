@@ -79,7 +79,7 @@ impl RepoExt for git2::Repository {
     }
 }
 
-/// TODO FITZGEN
+/// A temporary git repository.
 pub struct TempRepo<'a>(git2::Repository, marker::PhantomData<&'a tempdir::TempDir>);
 
 impl<'a> fmt::Debug for TempRepo<'a> {
@@ -97,7 +97,8 @@ impl<'a> ops::Deref for TempRepo<'a> {
 }
 
 impl<'a> TempRepo<'a> {
-    /// TODO FITZGEN
+    /// Create a new temporary git repository, with an initial commit
+    /// introducing an empty test case file within it.
     pub fn new(dir: &'a tempdir::TempDir) -> error::Result<TempRepo<'a>> {
         let repo = git2::Repository::init(dir.path())?;
 
@@ -120,7 +121,7 @@ impl<'a> TempRepo<'a> {
         Ok(TempRepo(repo, marker::PhantomData))
     }
 
-    /// TODO FITZGEN
+    /// Create a temporary clone repository of a local upstream git repository.
     pub fn clone<P>(upstream: P, dir: &'a tempdir::TempDir) -> error::Result<TempRepo<'a>>
         where P: AsRef<path::Path>
     {

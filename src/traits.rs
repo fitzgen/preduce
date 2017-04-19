@@ -44,7 +44,7 @@ pub trait IsInteresting: Send {
     /// otherwise.
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool>;
 
-    /// TODO FITZGEN
+    /// Clone this `IsInteresting` predicate as an owned trait object.
     fn clone(&self) -> Box<IsInteresting> where Self: 'static;
 }
 

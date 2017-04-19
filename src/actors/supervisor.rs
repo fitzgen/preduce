@@ -61,21 +61,22 @@ impl Supervisor {
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Notify the supervisor that the worker with the given id panicked.
     pub fn worker_panicked(&self, id: WorkerId, panic: Box<Any + Send + 'static>) {
         self.sender
             .send(SupervisorMessage::WorkerPanicked(id, panic))
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Notify the supervisor that the worker with the given id errored out.
     pub fn worker_errored(&self, id: WorkerId, err: error::Error) {
         self.sender
             .send(SupervisorMessage::WorkerErrored(id, err))
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Notify the supervisor that the given test case has been found to be
+    /// interesting.
     pub fn report_interesting(&self, interesting: test_case::Interesting) {
         self.sender
             .send(SupervisorMessage::ReportInteresting(interesting))

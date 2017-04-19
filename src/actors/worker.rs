@@ -68,17 +68,18 @@ impl Worker {
         me
     }
 
-    /// TODO FITZGEN
+    /// Get the id of this worker.
     pub fn id(&self) -> WorkerId {
         self.id
     }
 
-    /// TODO FITZGEN
+    /// Tell this worker to shutdown.
     pub fn shutdown(self) {
         self.sender.send(WorkerMessage::Shutdown).unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Send the worker the response to its request for another potential
+    /// reduction.
     pub fn next_reduction_response(&self, reduction: test_case::PotentialReduction) {
         self.sender
             .send(WorkerMessage::NextReductionResponse(reduction))
