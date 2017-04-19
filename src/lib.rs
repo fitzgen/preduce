@@ -75,13 +75,13 @@ impl<I, R> Options<I, R>
     /// let opts = preduce::Options::new(predicate, reducer, "path/to/test-case");
     /// # let _ = opts;
     /// ```
-    pub fn new<P>(is_interesting: I, reducer: R, test_case: P) -> Options<I, R>
+    pub fn new<P>(is_interesting: I, reducer: R, test_case: P) -> Options<I, reducers::Fuse<R>>
         where P: Into<path::PathBuf>
     {
         Options {
             test_case: test_case.into(),
             is_interesting: is_interesting,
-            reducer: reducer,
+            reducer: reducers::Fuse::new(reducer),
             workers: num_cpus::get(),
         }
     }
@@ -139,5 +139,15 @@ impl<I, R> Options<I, R>
     pub fn num_workers(&self) -> usize {
         assert!(self.workers > 0);
         self.workers
+    }
+
+    /// TODO FITZGEN
+    pub fn predicate(&self) -> &I {
+        &self.is_interesting
+    }
+
+    /// TODO FITZGEN
+    pub fn reducer(&mut self) -> &mut R {
+        &mut self.reducer
     }
 }

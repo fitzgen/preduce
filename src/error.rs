@@ -23,6 +23,9 @@ pub enum Error {
 
     /// An error that occurred when attempting to backup the original test case.
     TestCaseBackupFailure(io::Error),
+
+    /// The initial test case did not pass the is-interesting predicate.
+    InitialTestCaseNotInteresting,
 }
 
 impl fmt::Display for Error {
@@ -37,6 +40,10 @@ impl fmt::Display for Error {
             Error::TestCaseBackupFailure(ref e) => {
                 write!(f, "Could not backup initial test case: {}", e)
             }
+            Error::InitialTestCaseNotInteresting => {
+                write!(f,
+                       "The initial test case did not pass the is-interesting predicate")
+            }
         }
     }
 }
@@ -49,6 +56,7 @@ impl error::Error for Error {
             Error::Thread(_) => "A panicked thread",
             Error::MisbehavingReducerScript(_) => "Misbehaving reducer script",
             Error::TestCaseBackupFailure(_) => "Could not backup initial test case",
+            Error::InitialTestCaseNotInteresting => "The initial test case did not pass the is-interesting predicate",
         }
     }
 }

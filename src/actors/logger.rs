@@ -1,6 +1,8 @@
 //! The logger actor receives log messages and writes them to a log file.
 
 use super::WorkerId;
+use error;
+use std::any::Any;
 use std::fmt;
 use std::io::Write;
 use std::path;
@@ -12,16 +14,77 @@ use std::thread;
 enum LoggerMessage {
     SpawningWorker(WorkerId),
     SpawnedWorker(WorkerId),
+    ShutdownWorker(WorkerId),
+    WorkerPanicked(WorkerId, Box<Any + Send + 'static>),
+    WorkerErrored(WorkerId, error::Error),
     BackingUpTestCase(String, String),
+    StartJudgingInteresting(WorkerId),
+    JudgedInteresting(WorkerId, u64),
+    JudgedNotInteresting(WorkerId),
+    NewSmallest(u64, u64),
+    IsNotSmaller,
+    StartGeneratingNextReduction,
+    FinishGeneratingNextReduction,
+    NoMoreReductions,
+    FinalReducedSize(u64, u64),
 }
 
 impl fmt::Display for LoggerMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            LoggerMessage::SpawningWorker(id) => write!(f, "Spawning worker {}", id),
-            LoggerMessage::SpawnedWorker(id) => write!(f, "Spawned worker {}", id),
+            LoggerMessage::SpawningWorker(id) => write!(f, "Supervisor: Spawning worker {}", id),
+            LoggerMessage::SpawnedWorker(id) => write!(f, "Worker {}: spawned", id),
+            LoggerMessage::ShutdownWorker(id) => write!(f, "Worker {}: shutting down", id),
+            LoggerMessage::WorkerErrored(id, ref err) => write!(f, "Worker {}: error: {}", id, err),
+            LoggerMessage::WorkerPanicked(id, _) => write!(f, "Worker {}: panicked!", id),
             LoggerMessage::BackingUpTestCase(ref from, ref to) => {
-                write!(f, "Backing up initial test case {} to {}", from, to)
+                write!(f,
+                       "Supervisor: backing up initial test case from {} to {}",
+                       from,
+                       to)
+            }
+            LoggerMessage::StartJudgingInteresting(id) => {
+                write!(f,
+                       "Worker {}: judging a test case's interesting-ness...",
+                       id)
+            }
+            LoggerMessage::JudgedInteresting(id, size) => {
+                write!(f,
+                       "Worker {}: found an interesting test case of size {} bytes",
+                       id,
+                       size)
+            }
+            LoggerMessage::JudgedNotInteresting(id) => {
+                write!(f, "Worker {}: found test case not interesting", id)
+            }
+            LoggerMessage::NewSmallest(new_size, orig_size) => {
+                assert!(new_size < orig_size);
+                assert!(orig_size != 0);
+                let percent = (new_size as f64) / (orig_size as f64) * 100.0;
+                write!(f,
+                       "Supervisor: new smallest interesting test case: {} bytes ({:.2}%)",
+                       new_size,
+                       percent)
+            }
+            LoggerMessage::IsNotSmaller => {
+                write!(f,
+                       "Supervisor: interesting test case is not smaller than current smallest; discarding")
+            }
+            LoggerMessage::StartGeneratingNextReduction => {
+                write!(f, "Supervisor: generating next reduction...")
+            }
+            LoggerMessage::FinishGeneratingNextReduction => {
+                write!(f, "Supervisor: finished generating next reduction")
+            }
+            LoggerMessage::NoMoreReductions => write!(f, "Supervisor: no more reductions"),
+            LoggerMessage::FinalReducedSize(final_size, orig_size) => {
+                assert!(final_size <= orig_size);
+                let percent = if orig_size == 0 {
+                    100.0
+                } else {
+                    (final_size as f64) / (orig_size as f64) * 100.0
+                };
+                write!(f, "Supervisor: final reduced size is {} bytes ({:.2}%)", final_size, percent)
             }
         }
     }
@@ -46,12 +109,16 @@ impl Logger {
 
     /// Log the start of spawning a worker.
     pub fn spawning_worker(&self, id: WorkerId) {
-        self.sender.send(LoggerMessage::SpawningWorker(id)).unwrap();
+        self.sender
+            .send(LoggerMessage::SpawningWorker(id))
+            .unwrap();
     }
 
     /// Log the end of spawning a worker.
     pub fn spawned_worker(&self, id: WorkerId) {
-        self.sender.send(LoggerMessage::SpawnedWorker(id)).unwrap();
+        self.sender
+            .send(LoggerMessage::SpawnedWorker(id))
+            .unwrap();
     }
 
     /// Log that we are backing up the initial test case.
@@ -61,7 +128,92 @@ impl Logger {
     {
         let from = from.as_ref().display().to_string();
         let to = to.as_ref().display().to_string();
-        self.sender.send(LoggerMessage::BackingUpTestCase(from, to)).unwrap();
+        self.sender
+            .send(LoggerMessage::BackingUpTestCase(from, to))
+            .unwrap();
+    }
+
+    /// Log that the worker with the given id is shutting down.
+    pub fn shutdown_worker(&self, id: WorkerId) {
+        self.sender
+            .send(LoggerMessage::ShutdownWorker(id))
+            .unwrap();
+    }
+
+    /// Log that the worker with the given id is shutting down.
+    pub fn worker_errored(&self, id: WorkerId, err: error::Error) {
+        self.sender
+            .send(LoggerMessage::WorkerErrored(id, err))
+            .unwrap();
+    }
+
+    /// Log that the worker with the given id is shutting down.
+    pub fn worker_panicked(&self, id: WorkerId, panic: Box<Any + Send + 'static>) {
+        self.sender
+            .send(LoggerMessage::WorkerPanicked(id, panic))
+            .unwrap();
+    }
+
+    /// TODO FITZGEN
+    pub fn start_judging_interesting(&self, id: WorkerId) {
+        self.sender
+            .send(LoggerMessage::StartJudgingInteresting(id))
+            .unwrap();
+    }
+
+    /// TODO FITZGEN
+    pub fn judged_interesting(&self, id: WorkerId, size: u64) {
+        self.sender
+            .send(LoggerMessage::JudgedInteresting(id, size))
+            .unwrap();
+    }
+
+    /// TODO FITZGEN
+    pub fn judged_not_interesting(&self, id: WorkerId) {
+        self.sender
+            .send(LoggerMessage::JudgedNotInteresting(id))
+            .unwrap();
+    }
+
+    /// TODO FITZGEN
+    pub fn new_smallest(&self, new_size: u64, orig_size: u64) {
+        assert!(new_size < orig_size);
+        assert!(orig_size != 0);
+        self.sender
+            .send(LoggerMessage::NewSmallest(new_size, orig_size))
+            .unwrap();
+    }
+
+    /// TODO FITZGEN
+    pub fn is_not_smaller(&self) {
+        self.sender.send(LoggerMessage::IsNotSmaller).unwrap();
+    }
+
+    /// TODO FITZGEN
+    pub fn start_generating_next_reduction(&self) {
+        self.sender
+            .send(LoggerMessage::StartGeneratingNextReduction)
+            .unwrap();
+    }
+
+    /// TODO FITZGEN
+    pub fn finish_generating_next_reduction(&self) {
+        self.sender
+            .send(LoggerMessage::FinishGeneratingNextReduction)
+            .unwrap();
+    }
+
+    /// TODO FITZGEN
+    pub fn no_more_reductions(&self) {
+        self.sender
+            .send(LoggerMessage::NoMoreReductions)
+            .unwrap();
+    }
+
+    /// TODO FITZGEN
+    pub fn final_reduced_size(&self, final_size: u64, orig_size: u64) {
+        assert!(final_size <= orig_size);
+        self.sender.send(LoggerMessage::FinalReducedSize(final_size, orig_size)).unwrap();
     }
 }
 

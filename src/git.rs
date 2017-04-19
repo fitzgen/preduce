@@ -3,7 +3,12 @@
 
 use error;
 use git2;
+use std::fmt;
+use std::fs;
+use std::marker;
+use std::ops;
 use std::path;
+use tempdir;
 
 /// The file name for test cases within a git repository.
 pub static TEST_CASE_FILE_NAME: &'static str = "test_case";
@@ -49,8 +54,7 @@ impl RepoExt for git2::Repository {
     }
 
     fn head_tree(&self) -> error::Result<git2::Tree> {
-        let tree = self.head_commit()?
-            .tree()?;
+        let tree = self.head_commit()?.tree()?;
         Ok(tree)
     }
 
@@ -72,5 +76,56 @@ impl RepoExt for git2::Repository {
                .parent()
                .expect(".git/ folder should always be within the root of the repo")
                .join(TEST_CASE_FILE_NAME))
+    }
+}
+
+/// TODO FITZGEN
+pub struct TempRepo<'a>(git2::Repository, marker::PhantomData<&'a tempdir::TempDir>);
+
+impl<'a> fmt::Debug for TempRepo<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "TempRepo({})", self.path().display())
+    }
+}
+
+impl<'a> ops::Deref for TempRepo<'a> {
+    type Target = git2::Repository;
+
+    fn deref(&self) -> &git2::Repository {
+        &self.0
+    }
+}
+
+impl<'a> TempRepo<'a> {
+    /// TODO FITZGEN
+    pub fn new(dir: &'a tempdir::TempDir) -> error::Result<TempRepo<'a>> {
+        let repo = git2::Repository::init(dir.path())?;
+
+        {
+            let test_case_path = repo.test_case_path()?;
+            let file = fs::File::create(&test_case_path)?;
+            file.sync_all()?;
+
+            let mut index = repo.index()?;
+            index
+                .add_path(path::Path::new(test_case_path.file_name().unwrap()))?;
+
+            let tree = repo.treebuilder(None)?.write()?;
+            let tree = repo.find_tree(tree)?;
+
+            let sig = signature();
+            repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])?;
+        }
+
+        Ok(TempRepo(repo, marker::PhantomData))
+    }
+
+    /// TODO FITZGEN
+    pub fn clone<P>(upstream: P, dir: &'a tempdir::TempDir) -> error::Result<TempRepo<'a>>
+        where P: AsRef<path::Path>
+    {
+        let upstream = upstream.as_ref().to_string_lossy();
+        let repo = git2::Repository::clone(&upstream, dir.path())?;
+        Ok(TempRepo(repo, marker::PhantomData))
     }
 }

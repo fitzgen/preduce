@@ -94,7 +94,7 @@ impl PotentialReduction {
                                judge: &I,
                                repo: &git2::Repository)
                                -> error::Result<Option<Interesting>>
-        where I: traits::IsInteresting
+        where I: ?Sized + traits::IsInteresting
     {
         assert_eq!(repo.state(), git2::RepositoryState::Clean);
 
@@ -255,17 +255,16 @@ impl Interesting {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use git::RepoExt;
+    use git::{RepoExt, TempRepo};
     use std::fs;
     use std::io::{Read, Write};
     use std::path;
     use tempdir;
-    use test_utils;
 
     #[test]
     fn interesting_initial_true() {
         let dir = tempdir::TempDir::new("into_interesting").unwrap();
-        let repo = test_utils::TestRepo::new(&dir);
+        let repo = TempRepo::new(&dir).expect("should create temp repo");
 
         let path = dir.path().join("initial");
         {
@@ -274,6 +273,7 @@ mod tests {
         }
 
         let judge = |_: &path::Path| Ok(true);
+        let judge = &judge;
 
         let interesting = Interesting::initial(path, &judge, &repo)
             .expect("should not error")
@@ -287,7 +287,8 @@ mod tests {
             fs::File::open(interesting.path()).expect("The repo test case path should have a file");
 
         let mut contents = String::new();
-        file.read_to_string(&mut contents).expect("And we should read from that file");
+        file.read_to_string(&mut contents)
+            .expect("And we should read from that file");
         assert_eq!(contents,
                    "la la la la la\n",
                    "And it should have the expected contents");
@@ -300,20 +301,25 @@ mod tests {
     #[test]
     fn interesting_initial_false() {
         let dir = tempdir::TempDir::new("into_interesting").unwrap();
-        let repo = test_utils::TestRepo::new(&dir);
+        let repo = TempRepo::new(&dir).expect("should create temp repo");
         let path = dir.path().join("initial");
-        let judge = |_: &path::Path| Ok(false);
-        let interesting = Interesting::initial(path, &judge, &repo).expect("should not error");
 
+        let judge = |_: &path::Path| Ok(false);
+        let judge = &judge;
+
+        let interesting = Interesting::initial(path, &judge, &repo).expect("should not error");
         assert_eq!(interesting, None);
     }
 
     #[test]
     fn interesting_initial_error() {
         let dir = tempdir::TempDir::new("into_interesting").unwrap();
-        let repo = test_utils::TestRepo::new(&dir);
+        let repo = TempRepo::new(&dir).expect("should create temp repo");
         let path = dir.path().join("initial");
+
         let judge = |_: &path::Path| Err(error::Error::Git(git2::Error::from_str("woops")));
+        let judge = &judge;
+
         let result = Interesting::initial(path, &judge, &repo);
         assert!(result.is_err());
     }
@@ -322,7 +328,7 @@ mod tests {
     #[test]
     fn into_interesting() {
         let dir = tempdir::TempDir::new("into_interesting").unwrap();
-        let repo = test_utils::TestRepo::new(&dir);
+        let repo = TempRepo::new(&dir).expect("should create temp repo");
 
         let initial_path = dir.path().join("initial");
         {
@@ -331,6 +337,7 @@ mod tests {
         }
 
         let judge = |_: &path::Path| Ok(true);
+        let judge = &judge;
 
         let interesting = Interesting::initial(initial_path, &judge, &repo)
             .expect("interesting should be ok")
@@ -345,7 +352,8 @@ mod tests {
         let reduction = PotentialReduction::new(interesting, "test", reduction_path)
             .expect("should create potenetial reduction");
 
-        let interesting_reduction = reduction.into_interesting(&judge, &repo)
+        let interesting_reduction = reduction
+            .into_interesting(&judge, &repo)
             .expect("interesting reduction should be ok")
             .expect("interesting reduction should be some");
 
@@ -356,7 +364,8 @@ mod tests {
         let mut file = fs::File::open(interesting_reduction.path())
             .expect("The repo test case path should have a file");
         let mut contents = String::new();
-        file.read_to_string(&mut contents).expect("And we should read from that file");
+        file.read_to_string(&mut contents)
+            .expect("And we should read from that file");
         assert_eq!(contents, "la\n", "And it should have the expected contents");
 
         assert_eq!(interesting_reduction.size(),

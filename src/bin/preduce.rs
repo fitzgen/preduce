@@ -20,27 +20,27 @@ fn parse_args() -> clap::ArgMatches<'static> {
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
         .arg(clap::Arg::with_name("predicate")
-             .required(true)
-             .help("The is-interesting predicate script."))
+                 .required(true)
+                 .help("The is-interesting predicate script."))
         .arg(clap::Arg::with_name("reducer")
-             .required(true)
-             .help("The reduction generator script."))
+                 .required(true)
+                 .help("The reduction generator script."))
         .arg(clap::Arg::with_name("test-case")
-             .required(true)
-             .help("The initial test case to reduce."))
+                 .required(true)
+                 .help("The initial test case to reduce."))
         .arg(clap::Arg::with_name("workers")
                  .short("w")
                  .long("workers")
                  .takes_value(true)
                  .value_name("NUM_WORKERS")
                  .validator(|a| {
-                     let num = a.parse::<usize>().map_err(|e| format!("{}", e))?;
-                     if num > 0 {
-                         Ok(())
-                     } else {
-                         Err("NUM_WORKERS must be a number greater than 0".into())
-                     }
-                 })
+                                let num = a.parse::<usize>().map_err(|e| format!("{}", e))?;
+                                if num > 0 {
+                                    Ok(())
+                                } else {
+                                    Err("NUM_WORKERS must be a number greater than 0".into())
+                                }
+                            })
                  .help("Set the number of parallel workers. Defaults to the number of logical \
                         CPUs."))
         .get_matches()

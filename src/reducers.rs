@@ -39,7 +39,7 @@ use traits::Reducer;
 /// seed="$1"
 ///
 /// # Count how many lines are in the test case.
-/// n=$(wc -l "$seed" | cut -c1)
+/// n=$(wc -l "$seed" | cut -d ' ' -f 1)
 ///
 /// # Generate a potential reduction of the seed's last line, then its last 2
 /// # lines, then its last 3 lines, etc...
@@ -48,11 +48,11 @@ use traits::Reducer;
 ///     read -r ignored
 ///
 ///     # Generate the potential reduction in a new file.
-///     tail -n "$i" > "tail-$i"
+///     tail -n "$i" "$seed" > "tail-$i"
 ///
 ///     # Tell `preduce` about the potential reduction.
 ///     echo "tail-$i"
-/// }
+/// done
 /// ```
 ///
 /// ### Example Rust Usage
@@ -102,14 +102,8 @@ impl Script {
         self.out_dir = Some(tempdir::TempDir::new("preduce-reduction-script")?);
 
         let mut cmd = process::Command::new(&self.program);
-        cmd.current_dir(self.out_dir
-                             .as_ref()
-                             .unwrap()
-                             .path())
-            .arg(self.seed
-                     .as_ref()
-                     .unwrap()
-                     .path())
+        cmd.current_dir(self.out_dir.as_ref().unwrap().path())
+            .arg(self.seed.as_ref().unwrap().path())
             .stdin(process::Stdio::piped())
             .stdout(process::Stdio::piped())
             .stderr(process::Stdio::null());
@@ -463,7 +457,6 @@ impl<R> Reducer for Fuse<R>
 
 #[cfg(test)]
 mod tests {
-    extern crate tempdir;
     extern crate tempfile;
 
     use super::*;
@@ -503,7 +496,10 @@ mod tests {
 
         for _ in 0..3 {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
-            let file_name = reduction.path().file_name().map(|s| s.to_string_lossy().into_owned());
+            let file_name = reduction
+                .path()
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned());
             match file_name.as_ref().map(|s| &s[..]) {
                 Some("counting-0") => found[0] = true,
                 Some("counting-1") => found[1] = true,
@@ -514,7 +510,10 @@ mod tests {
 
         for _ in 0..3 {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
-            let file_name = reduction.path().file_name().map(|s| s.to_string_lossy().into_owned());
+            let file_name = reduction
+                .path()
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned());
             match file_name.as_ref().map(|s| &s[..]) {
                 Some("counting-3") => found[3] = true,
                 Some("counting-4") => found[4] = true,
@@ -539,7 +538,8 @@ mod tests {
 
         let mut next_file_name = || {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
-            reduction.path()
+            reduction
+                .path()
                 .file_name()
                 .unwrap()
                 .to_string_lossy()

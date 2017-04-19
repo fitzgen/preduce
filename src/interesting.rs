@@ -3,9 +3,22 @@
 use error;
 use std::ffi;
 use std::fs;
+use std::panic::UnwindSafe;
 use std::path;
 use std::process;
 use traits::IsInteresting;
+
+impl IsInteresting for Box<IsInteresting> {
+    fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
+        (**self).is_interesting(potential_reduction)
+    }
+
+    fn clone(&self) -> Box<IsInteresting>
+        where Self: 'static
+    {
+        (**self).clone()
+    }
+}
 
 /// An `IsInteresting` implementation that rejects empty test cases, and accepts
 /// all others.
@@ -14,11 +27,12 @@ pub struct NonEmpty;
 
 impl IsInteresting for NonEmpty {
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
-        let len = fs::File::open(potential_reduction)
-            ?
-            .metadata()?
-            .len();
+        let len = fs::File::open(potential_reduction)?.metadata()?.len();
         Ok(len != 0)
+    }
+
+    fn clone(&self) -> Box<IsInteresting> {
+        Box::new(NonEmpty) as _
     }
 }
 
@@ -99,9 +113,11 @@ impl IsInteresting for Script {
             }
         }
 
-        Ok(cmd.spawn()?
-               .wait()?
-               .success())
+        Ok(cmd.spawn()?.wait()?.success())
+    }
+
+    fn clone(&self) -> Box<IsInteresting> {
+        Box::new(Clone::clone(self)) as _
     }
 }
 
@@ -160,6 +176,12 @@ impl<T, U> IsInteresting for And<T, U>
         Ok(self.first.is_interesting(potential_reduction)? &&
            self.second.is_interesting(potential_reduction)?)
     }
+
+    fn clone(&self) -> Box<IsInteresting>
+        where Self: 'static
+    {
+        Box::new(And::new(self.first.clone(), self.second.clone())) as _
+    }
 }
 
 /// Given two is-interesting tests, combine them into a single is-interesting
@@ -213,13 +235,25 @@ impl<T, U> IsInteresting for Or<T, U>
         Ok(self.first.is_interesting(potential_reduction)? ||
            self.second.is_interesting(potential_reduction)?)
     }
+
+    fn clone(&self) -> Box<IsInteresting>
+        where Self: 'static
+    {
+        Box::new(And::new(self.first.clone(), self.second.clone())) as _
+    }
 }
 
 impl<T> IsInteresting for T
-    where T: Send + for<'a> Fn(&'a path::Path) -> error::Result<bool>
+    where T: Clone + Send + UnwindSafe + for<'a> Fn(&'a path::Path) -> error::Result<bool>
 {
     fn is_interesting(&self, reduction: &path::Path) -> error::Result<bool> {
         (*self)(reduction)
+    }
+
+    fn clone(&self) -> Box<IsInteresting>
+        where Self: 'static
+    {
+        Box::new(self.clone()) as _
     }
 }
 
@@ -299,6 +333,7 @@ mod tests {
     #[test]
     fn func_returns_true() {
         let test = |_: &path::Path| Ok(true);
+        let test = &test;
         let test_case = tempfile::NamedTempFile::new().unwrap();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
@@ -306,6 +341,7 @@ mod tests {
     #[test]
     fn func_returns_false() {
         let test = |_: &path::Path| Ok(false);
+        let test = &test;
         let test_case = tempfile::NamedTempFile::new().unwrap();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }

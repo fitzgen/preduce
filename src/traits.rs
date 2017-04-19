@@ -43,6 +43,9 @@ pub trait IsInteresting: Send {
     /// Return `true` if the reduced test case is interesting, `false`
     /// otherwise.
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool>;
+
+    /// TODO FITZGEN
+    fn clone(&self) -> Box<IsInteresting> where Self: 'static;
 }
 
 #[cfg(test)]
