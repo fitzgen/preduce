@@ -141,12 +141,12 @@ impl<I, R> Options<I, R>
         self.workers
     }
 
-    /// TODO FITZGEN
+    /// Get this `Options`' `IsInteresting` predicate.
     pub fn predicate(&self) -> &I {
         &self.is_interesting
     }
 
-    /// TODO FITZGEN
+    /// Get this `Options`' `Reducer`.
     pub fn reducer(&mut self) -> &mut R {
         &mut self.reducer
     }

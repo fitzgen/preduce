@@ -154,28 +154,32 @@ impl Logger {
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Log that the worker with the given id has started running an
+    /// is-interesting predicate on its test case.
     pub fn start_judging_interesting(&self, id: WorkerId) {
         self.sender
             .send(LoggerMessage::StartJudgingInteresting(id))
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Log that the worker with the given id has discovered a new interesting
+    /// test case.
     pub fn judged_interesting(&self, id: WorkerId, size: u64) {
         self.sender
             .send(LoggerMessage::JudgedInteresting(id, size))
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Log that the worker with the given id has discovered that its test case
+    /// is not interesting.
     pub fn judged_not_interesting(&self, id: WorkerId) {
         self.sender
             .send(LoggerMessage::JudgedNotInteresting(id))
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Log that the supervisor has a new globally smallest interesting test
+    /// case.
     pub fn new_smallest(&self, new_size: u64, orig_size: u64) {
         assert!(new_size < orig_size);
         assert!(orig_size != 0);
@@ -184,33 +188,39 @@ impl Logger {
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Log that the supervisor received a new interesting test case, but that
+    /// it is not smaller than the current globally smallest interesting test
+    /// case.
     pub fn is_not_smaller(&self) {
         self.sender.send(LoggerMessage::IsNotSmaller).unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Log that the supervisor has started generating the next potential
+    /// reduction.
     pub fn start_generating_next_reduction(&self) {
         self.sender
             .send(LoggerMessage::StartGeneratingNextReduction)
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Log that the supervisor has completed generating the next potential
+    /// reduction.
     pub fn finish_generating_next_reduction(&self) {
         self.sender
             .send(LoggerMessage::FinishGeneratingNextReduction)
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Log that the supervisor has exhuasted potential reductions for the
+    /// current globally smallest interesting test case.
     pub fn no_more_reductions(&self) {
         self.sender
             .send(LoggerMessage::NoMoreReductions)
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Log the final reduced test case's size once the reduction process has
+    /// completed.
     pub fn final_reduced_size(&self, final_size: u64, orig_size: u64) {
         assert!(final_size <= orig_size);
         self.sender.send(LoggerMessage::FinalReducedSize(final_size, orig_size)).unwrap();
