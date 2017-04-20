@@ -4,7 +4,7 @@
 use super::{Logger, Worker, WorkerId};
 use super::super::Options;
 use error;
-use git;
+use git::{self, RepoExt};
 use git2;
 use std::any::Any;
 use std::collections::HashMap;
@@ -79,7 +79,7 @@ impl Supervisor {
     /// interesting.
     pub fn report_interesting(&self, who: Worker, interesting: test_case::Interesting) {
         self.sender
-            .send(SupervisorMessage::ReportInteresting(interesting))
+            .send(SupervisorMessage::ReportInteresting(who, interesting))
             .unwrap();
     }
 }
@@ -211,11 +211,14 @@ impl<'a, I, R> SupervisorActor<'a, I, R>
         let new_size = interesting.size();
 
         if new_size < old_size {
-            // TODO FITZGEN: fetch the worker's repo, reset our HEAD to
-            // the worker's repo's HEAD.
-            let mut remote = interesting.repo_path();
-            let remote = remote.to_string_lossy();
-            let remote = self.repo.remote_anonymous(&remote)?;
+            {
+                // TODO FITZGEN: fetch the worker's repo, reset our HEAD to the
+                // worker's repo's HEAD.
+                let remote = interesting.repo_path();
+                let remote = remote.to_string_lossy();
+                let remote = self.repo.remote_anonymous(&remote)?;
+                // TODO FITZGEN
+            }
 
             *smallest_interesting = interesting;
             self.opts
@@ -232,7 +235,7 @@ impl<'a, I, R> SupervisorActor<'a, I, R>
             // interesting test case and see if that is also interesting and
             // even smaller.
             self.logger.is_not_smaller();
-            who.try_merge(old_size, self.repo.head_id());
+            who.try_merge(old_size, self.repo.head_id()?);
         }
 
         Ok(())

@@ -287,7 +287,7 @@ impl<'a> Interesting<'a> {
     fn report_to_supervisor(self) -> Either<TryMerge<'a>, Option<Test<'a>>> {
         self.worker
             .supervisor
-            .report_interesting(self.interesting.clone());
+            .report_interesting(self.worker.me.clone(), self.interesting.clone());
 
         match self.worker.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => Right(self.worker.shutdown()),
