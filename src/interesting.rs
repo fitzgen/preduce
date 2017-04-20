@@ -14,7 +14,8 @@ impl IsInteresting for Box<IsInteresting> {
     }
 
     fn clone(&self) -> Box<IsInteresting>
-        where Self: 'static
+    where
+        Self: 'static,
     {
         (**self).clone()
     }
@@ -90,7 +91,8 @@ pub struct Script {
 impl Script {
     /// Construct a new `Script` is-interesting test that runs the given program.
     pub fn new<S>(program: S) -> Script
-        where S: Into<ffi::OsString>
+    where
+        S: Into<ffi::OsString>,
     {
         Script { program: program.into() }
     }
@@ -169,16 +171,20 @@ impl<T, U> And<T, U> {
 }
 
 impl<T, U> IsInteresting for And<T, U>
-    where T: IsInteresting,
-          U: IsInteresting
+where
+    T: IsInteresting,
+    U: IsInteresting,
 {
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
-        Ok(self.first.is_interesting(potential_reduction)? &&
-           self.second.is_interesting(potential_reduction)?)
+        Ok(
+            self.first.is_interesting(potential_reduction)? &&
+            self.second.is_interesting(potential_reduction)?,
+        )
     }
 
     fn clone(&self) -> Box<IsInteresting>
-        where Self: 'static
+    where
+        Self: 'static,
     {
         Box::new(And::new(self.first.clone(), self.second.clone())) as _
     }
@@ -228,16 +234,20 @@ impl<T, U> Or<T, U> {
 }
 
 impl<T, U> IsInteresting for Or<T, U>
-    where T: IsInteresting,
-          U: IsInteresting
+where
+    T: IsInteresting,
+    U: IsInteresting,
 {
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
-        Ok(self.first.is_interesting(potential_reduction)? ||
-           self.second.is_interesting(potential_reduction)?)
+        Ok(
+            self.first.is_interesting(potential_reduction)? ||
+            self.second.is_interesting(potential_reduction)?,
+        )
     }
 
     fn clone(&self) -> Box<IsInteresting>
-        where Self: 'static
+    where
+        Self: 'static,
     {
         Box::new(And::new(self.first.clone(), self.second.clone())) as _
     }

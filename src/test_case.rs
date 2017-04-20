@@ -56,12 +56,14 @@ impl PotentialReduction {
     ///
     /// The `test_case` must be the file path of the potential reduction's test
     /// case.
-    pub fn new<S, P>(seed: Interesting,
-                     provenance: S,
-                     test_case: P)
-                     -> error::Result<PotentialReduction>
-        where S: Into<String>,
-              P: AsRef<path::Path>
+    pub fn new<S, P>(
+        seed: Interesting,
+        provenance: S,
+        test_case: P,
+    ) -> error::Result<PotentialReduction>
+    where
+        S: Into<String>,
+        P: AsRef<path::Path>,
     {
         let provenance = provenance.into();
         assert!(!provenance.is_empty());
@@ -72,29 +74,35 @@ impl PotentialReduction {
 
         let size = fs::metadata(&path)?.len();
 
-        Ok(PotentialReduction {
-               provenance: provenance,
-               parent: seed.commit_id(),
-               path: path,
-               size: size,
-           })
+        Ok(
+            PotentialReduction {
+                provenance: provenance,
+                parent: seed.commit_id(),
+                path: path,
+                size: size,
+            },
+        )
     }
 
     fn make_commit_message(&self) -> String {
-        format!("{} - {} - {}",
-                self.provenance,
-                self.size(),
-                self.path().display())
+        format!(
+            "{} - {} - {}",
+            self.provenance,
+            self.size(),
+            self.path().display()
+        )
     }
 
     /// Try and convert this *potential* reduction into an *interesting* test
     /// case by validating whether it is interesting or not using the given
     /// `judge`.
-    pub fn into_interesting<I>(mut self,
-                               judge: &I,
-                               repo: &git2::Repository)
-                               -> error::Result<Option<Interesting>>
-        where I: ?Sized + traits::IsInteresting
+    pub fn into_interesting<I>(
+        mut self,
+        judge: &I,
+        repo: &git2::Repository,
+    ) -> error::Result<Option<Interesting>>
+    where
+        I: ?Sized + traits::IsInteresting,
     {
         assert_eq!(repo.state(), git2::RepositoryState::Clean);
 
@@ -109,10 +117,14 @@ impl PotentialReduction {
         let msg = self.make_commit_message();
         let commit_id = repo.commit_test_case(&msg)?;
 
-        Ok(Some(Interesting {
+        Ok(
+            Some(
+                Interesting {
                     kind: InterestingKind::Reduction(self),
                     commit_id: commit_id,
-                }))
+                },
+            ),
+        )
     }
 }
 
@@ -139,12 +151,14 @@ impl TestCaseMethods for Interesting {
 impl Interesting {
     /// Construct the initial interesting test case with the given `judge` of
     /// whether a test case is interesting or not.
-    pub fn initial<P, I>(file_path: P,
-                         judge: &I,
-                         repo: &git2::Repository)
-                         -> error::Result<Option<Interesting>>
-        where P: AsRef<path::Path>,
-              I: traits::IsInteresting
+    pub fn initial<P, I>(
+        file_path: P,
+        judge: &I,
+        repo: &git2::Repository,
+    ) -> error::Result<Option<Interesting>>
+    where
+        P: AsRef<path::Path>,
+        I: traits::IsInteresting,
     {
         assert_eq!(repo.state(), git2::RepositoryState::Clean);
 
@@ -160,13 +174,65 @@ impl Interesting {
         let msg = format!("Initial - {} - {}", size, file_path.as_ref().display());
         let commit_id = repo.commit_test_case(&msg)?;
 
-        Ok(Some(Interesting {
-                    kind: InterestingKind::Initial(InitialInteresting {
-                                                       path: repo_test_case_path,
-                                                       size: size,
-                                                   }),
+        Ok(
+            Some(
+                Interesting {
+                    kind: InterestingKind::Initial(
+                        InitialInteresting {
+                            path: repo_test_case_path,
+                            size: size,
+                        },
+                    ),
                     commit_id: commit_id,
-                }))
+                },
+            ),
+        )
+    }
+
+    /// Clone this interesting test case by having the `into_repo` git
+    /// repository fetch this interesting test case's repository and reset hard
+    /// to the interesting test case's commit.
+    ///
+    /// The `into_repo` repository must not be this interesting test case's
+    /// containing repository, and it must be in a clean state.
+    pub fn clone_by_resetting_into_repo(
+        &self,
+        into_repo: &git2::Repository,
+    ) -> error::Result<Interesting> {
+        assert_eq!(into_repo.state(), git2::RepositoryState::Clean);
+        assert!(self.repo_path() != into_repo.path());
+
+        // Fetch the worker's repo, and then reset our HEAD to the
+        // worker's repo's HEAD.
+        let remote = self.repo_path();
+        let remote = remote.to_string_lossy();
+        let mut remote = into_repo.remote_anonymous(&remote)?;
+        remote.fetch(&["master"], None, None)?;
+        let object = into_repo
+            .find_object(self.commit_id(), Some(git2::ObjectType::Commit))?;
+        into_repo.reset(&object, git2::ResetType::Hard, None)?;
+
+        let new_path = into_repo.test_case_path()?;
+        Ok(
+            Interesting {
+                kind: match self.kind {
+                    InterestingKind::Initial(ref initial) => {
+                        InterestingKind::Initial(
+                            InitialInteresting {
+                                path: new_path,
+                                size: initial.size,
+                            },
+                        )
+                    }
+                    InterestingKind::Reduction(ref reduction) => {
+                        let mut reduction = reduction.clone();
+                        reduction.path = new_path;
+                        InterestingKind::Reduction(reduction)
+                    }
+                },
+                commit_id: self.commit_id,
+            },
+        )
     }
 
     /// Get the commit id of this interesting test case.
@@ -233,7 +299,8 @@ impl TestCaseMethods for InitialInteresting {
 #[cfg(test)]
 impl PotentialReduction {
     pub fn testing_only_new<P>(path: P) -> PotentialReduction
-        where P: AsRef<path::Path>
+    where
+        P: AsRef<path::Path>,
     {
         PotentialReduction {
             provenance: "PotentialReduction::testing_only_new".into(),
@@ -247,13 +314,16 @@ impl PotentialReduction {
 #[cfg(test)]
 impl Interesting {
     pub fn testing_only_new<P>(path: P) -> Interesting
-        where P: AsRef<path::Path>
+    where
+        P: AsRef<path::Path>,
     {
         Interesting {
-            kind: InterestingKind::Initial(InitialInteresting {
-                                               path: path.as_ref().into(),
-                                               size: 0,
-                                           }),
+            kind: InterestingKind::Initial(
+                InitialInteresting {
+                    path: path.as_ref().into(),
+                    size: 0,
+                },
+            ),
             commit_id: git2::Oid::from_bytes(&[0; 20]).unwrap(),
         }
     }
@@ -286,9 +356,11 @@ mod tests {
             .expect("should not error")
             .expect("and should find the initial test case interesting");
 
-        assert_eq!(interesting.path(),
-                   repo.test_case_path().unwrap(),
-                   "The repo path should become the canonical test case path");
+        assert_eq!(
+            interesting.path(),
+            repo.test_case_path().unwrap(),
+            "The repo path should become the canonical test case path"
+        );
 
         let mut file =
             fs::File::open(interesting.path()).expect("The repo test case path should have a file");
@@ -296,13 +368,17 @@ mod tests {
         let mut contents = String::new();
         file.read_to_string(&mut contents)
             .expect("And we should read from that file");
-        assert_eq!(contents,
-                   "la la la la la\n",
-                   "And it should have the expected contents");
+        assert_eq!(
+            contents,
+            "la la la la la\n",
+            "And it should have the expected contents"
+        );
 
-        assert_eq!(interesting.size(),
-                   contents.len() as _,
-                   "And the test case should have the expected size");
+        assert_eq!(
+            interesting.size(),
+            contents.len() as _,
+            "And the test case should have the expected size"
+        );
     }
 
     #[test]
@@ -364,9 +440,11 @@ mod tests {
             .expect("interesting reduction should be ok")
             .expect("interesting reduction should be some");
 
-        assert_eq!(interesting_reduction.path(),
-                   repo.test_case_path().unwrap(),
-                   "The interesting reduction's path should be the repo test case path");
+        assert_eq!(
+            interesting_reduction.path(),
+            repo.test_case_path().unwrap(),
+            "The interesting reduction's path should be the repo test case path"
+        );
 
         let mut file = fs::File::open(interesting_reduction.path())
             .expect("The repo test case path should have a file");
@@ -375,8 +453,10 @@ mod tests {
             .expect("And we should read from that file");
         assert_eq!(contents, "la\n", "And it should have the expected contents");
 
-        assert_eq!(interesting_reduction.size(),
-                   contents.len() as _,
-                   "And the test case should have the expected size");
+        assert_eq!(
+            interesting_reduction.size(),
+            contents.len() as _,
+            "And the test case should have the expected size"
+        );
     }
 }

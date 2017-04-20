@@ -38,21 +38,27 @@ impl fmt::Display for LoggerMessage {
             LoggerMessage::WorkerErrored(id, ref err) => write!(f, "Worker {}: error: {}", id, err),
             LoggerMessage::WorkerPanicked(id, _) => write!(f, "Worker {}: panicked!", id),
             LoggerMessage::BackingUpTestCase(ref from, ref to) => {
-                write!(f,
-                       "Supervisor: backing up initial test case from {} to {}",
-                       from,
-                       to)
+                write!(
+                    f,
+                    "Supervisor: backing up initial test case from {} to {}",
+                    from,
+                    to
+                )
             }
             LoggerMessage::StartJudgingInteresting(id) => {
-                write!(f,
-                       "Worker {}: judging a test case's interesting-ness...",
-                       id)
+                write!(
+                    f,
+                    "Worker {}: judging a test case's interesting-ness...",
+                    id
+                )
             }
             LoggerMessage::JudgedInteresting(id, size) => {
-                write!(f,
-                       "Worker {}: found an interesting test case of size {} bytes",
-                       id,
-                       size)
+                write!(
+                    f,
+                    "Worker {}: found an interesting test case of size {} bytes",
+                    id,
+                    size
+                )
             }
             LoggerMessage::JudgedNotInteresting(id) => {
                 write!(f, "Worker {}: found test case not interesting", id)
@@ -61,14 +67,18 @@ impl fmt::Display for LoggerMessage {
                 assert!(new_size < orig_size);
                 assert!(orig_size != 0);
                 let percent = (new_size as f64) / (orig_size as f64) * 100.0;
-                write!(f,
-                       "Supervisor: new smallest interesting test case: {} bytes ({:.2}%)",
-                       new_size,
-                       percent)
+                write!(
+                    f,
+                    "Supervisor: new smallest interesting test case: {} bytes ({:.2}%)",
+                    new_size,
+                    percent
+                )
             }
             LoggerMessage::IsNotSmaller => {
-                write!(f,
-                       "Supervisor: interesting test case is not smaller than current smallest; discarding")
+                write!(
+                    f,
+                    "Supervisor: interesting test case is not smaller than current smallest; discarding"
+                )
             }
             LoggerMessage::StartGeneratingNextReduction => {
                 write!(f, "Supervisor: generating next reduction...")
@@ -84,10 +94,12 @@ impl fmt::Display for LoggerMessage {
                 } else {
                     (final_size as f64) / (orig_size as f64) * 100.0
                 };
-                write!(f,
-                       "Supervisor: final reduced size is {} bytes ({:.2}%)",
-                       final_size,
-                       percent)
+                write!(
+                    f,
+                    "Supervisor: final reduced size is {} bytes ({:.2}%)",
+                    final_size,
+                    percent
+                )
             }
         }
     }
@@ -103,7 +115,8 @@ pub struct Logger {
 impl Logger {
     /// Spawn a `Logger` actor, writing logs to the given `Write`able.
     pub fn spawn<W>(to: W) -> Logger
-        where W: 'static + Send + Write
+    where
+        W: 'static + Send + Write,
     {
         let (sender, receiver) = mpsc::channel();
         thread::spawn(move || Logger::run(to, receiver));
@@ -126,8 +139,9 @@ impl Logger {
 
     /// Log that we are backing up the initial test case.
     pub fn backing_up_test_case<P, Q>(&self, from: P, to: Q)
-        where P: AsRef<path::Path>,
-              Q: AsRef<path::Path>
+    where
+        P: AsRef<path::Path>,
+        Q: AsRef<path::Path>,
     {
         let from = from.as_ref().display().to_string();
         let to = to.as_ref().display().to_string();
@@ -235,7 +249,8 @@ impl Logger {
 /// Logger actor implementation.
 impl Logger {
     fn run<W>(mut to: W, incoming: mpsc::Receiver<LoggerMessage>)
-        where W: Write
+    where
+        W: Write,
     {
         for log_msg in incoming {
             writeln!(&mut to, "{}", log_msg).expect("Should write to log file");

@@ -38,7 +38,7 @@ pub trait RepoExt {
     /// Get the path to the test case file within this repo.
     fn test_case_path(&self) -> error::Result<path::PathBuf>;
 
-    /// TODO FITZGEN
+    /// Fetch the origin remote.
     fn fetch_origin(&self) -> error::Result<()>;
 }
 
@@ -47,7 +47,7 @@ impl RepoExt for git2::Repository {
         self.find_reference("HEAD")?
             .resolve()?
             .target()
-            .ok_or_else(|| git2::Error::from_str("HEAD reference has no target Oid").into())
+            .ok_or_else(|| git2::Error::from_str("HEAD reference has no target Oid").into(),)
     }
 
     fn head_commit(&self) -> error::Result<git2::Commit> {
@@ -74,11 +74,13 @@ impl RepoExt for git2::Repository {
     }
 
     fn test_case_path(&self) -> error::Result<path::PathBuf> {
-        Ok(self.path()
-               .canonicalize()?
-               .parent()
-               .expect(".git/ folder should always be within the root of the repo")
-               .join(TEST_CASE_FILE_NAME))
+        Ok(
+            self.path()
+                .canonicalize()?
+                .parent()
+                .expect(".git/ folder should always be within the root of the repo")
+                .join(TEST_CASE_FILE_NAME),
+        )
     }
 
     fn fetch_origin(&self) -> error::Result<()> {
@@ -132,7 +134,8 @@ impl<'a> TempRepo<'a> {
 
     /// Create a temporary clone repository of a local upstream git repository.
     pub fn clone<P>(upstream: P, dir: &'a tempdir::TempDir) -> error::Result<TempRepo<'a>>
-        where P: AsRef<path::Path>
+    where
+        P: AsRef<path::Path>,
     {
         let upstream = upstream.as_ref().to_string_lossy();
         let repo = git2::Repository::clone(&upstream, dir.path())?;

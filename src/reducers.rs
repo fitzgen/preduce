@@ -84,7 +84,8 @@ pub struct Script {
 impl Script {
     /// Construct a reducer script with the given `program`.
     pub fn new<S>(program: S) -> Script
-        where S: Into<ffi::OsString>
+    where
+        S: Into<ffi::OsString>,
     {
         Script {
             program: program.into(),
@@ -142,9 +143,11 @@ impl Reducer for Script {
     }
 
     fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
-        assert!(self.seed.is_some(),
-                "Must be initialized with calls to set_seed before asking for potential \
-                 reductions");
+        assert!(
+            self.seed.is_some(),
+            "Must be initialized with calls to set_seed before asking for potential \
+                 reductions"
+        );
 
         if self.child.is_none() {
             self.spawn_child()?;
@@ -169,9 +172,11 @@ impl Reducer for Script {
         }
 
         if path.pop() != Some('\n') {
-            let details = format!("'{}' is not conforming to the reducer script protocol: \
+            let details = format!(
+                "'{}' is not conforming to the reducer script protocol: \
                                    expected a trailing newline",
-                                  self.program.to_string_lossy());
+                self.program.to_string_lossy()
+            );
             return Err(error::Error::MisbehavingReducerScript(details));
         }
 
@@ -188,22 +193,28 @@ impl Reducer for Script {
         };
 
         if !path.starts_with(self.out_dir.as_ref().unwrap()) {
-            let details = format!("'{}' is generating test cases outside of its out directory: {}",
-                                  self.program.to_string_lossy(),
-                                  path.to_string_lossy());
+            let details = format!(
+                "'{}' is generating test cases outside of its out directory: {}",
+                self.program.to_string_lossy(),
+                path.to_string_lossy()
+            );
             return Err(error::Error::MisbehavingReducerScript(details));
         }
 
         if !path.is_file() {
-            let details = format!("'{}' is generating test cases that don't exist: {}",
-                                  self.program.to_string_lossy(),
-                                  path.to_string_lossy());
+            let details = format!(
+                "'{}' is generating test cases that don't exist: {}",
+                self.program.to_string_lossy(),
+                path.to_string_lossy()
+            );
             return Err(error::Error::MisbehavingReducerScript(details));
         }
 
-        let reduction = test_case::PotentialReduction::new(self.seed.clone().unwrap(),
-                                                           self.program.to_string_lossy(),
-                                                           path)?;
+        let reduction = test_case::PotentialReduction::new(
+            self.seed.clone().unwrap(),
+            self.program.to_string_lossy(),
+            path,
+        )?;
         Ok(Some(reduction))
     }
 }
@@ -261,7 +272,8 @@ impl<R> Shuffle<R> {
 }
 
 impl<R> Reducer for Shuffle<R>
-    where R: Reducer
+where
+    R: Reducer,
 {
     fn set_seed(&mut self, seed: test_case::Interesting) {
         self.buffer.clear();
@@ -345,8 +357,9 @@ impl<T, U> Chain<T, U> {
 }
 
 impl<T, U> Reducer for Chain<T, U>
-    where T: Reducer,
-          U: Reducer
+where
+    T: Reducer,
+    U: Reducer,
 {
     fn set_seed(&mut self, seed: test_case::Interesting) {
         self.first.set_seed(seed.clone());
@@ -432,7 +445,8 @@ impl<R> Fuse<R> {
 }
 
 impl<R> Reducer for Fuse<R>
-    where R: Reducer
+where
+    R: Reducer,
 {
     fn set_seed(&mut self, seed: test_case::Interesting) {
         self.reducer.set_seed(seed);
@@ -568,10 +582,10 @@ mod tests {
         impl Reducer for Erratic {
             fn set_seed(&mut self, _: test_case::Interesting) {}
 
-            fn next_potential_reduction(&mut self)
-                                        -> error::Result<Option<test_case::PotentialReduction>> {
+            fn next_potential_reduction(&mut self,)
+                -> error::Result<Option<test_case::PotentialReduction>> {
                 let result = match self.0 % 3 {
-                    0 => Ok(Some(test_case::PotentialReduction::testing_only_new("hello"))),
+                    0 => Ok(Some(test_case::PotentialReduction::testing_only_new("hello")),),
                     1 => Ok(None),
                     2 => Err(error::Error::MisbehavingReducerScript("TEST".into())),
                     _ => unreachable!(),

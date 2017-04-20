@@ -49,12 +49,13 @@ pub struct Worker {
 /// Worker client API.
 impl Worker {
     /// Spawn a new worker actor.
-    pub fn spawn(id: WorkerId,
-                 predicate: Box<traits::IsInteresting>,
-                 supervisor: Supervisor,
-                 logger: Logger,
-                 upstream: &path::Path)
-                 -> Self {
+    pub fn spawn(
+        id: WorkerId,
+        predicate: Box<traits::IsInteresting>,
+        supervisor: Supervisor,
+        logger: Logger,
+        upstream: &path::Path,
+    ) -> Self {
         logger.spawning_worker(id);
 
         let upstream = upstream.into();
@@ -66,9 +67,11 @@ impl Worker {
         };
         let me2 = me.clone();
 
-        thread::spawn(move || {
-            WorkerActor::run(id, me2, predicate, receiver, supervisor, logger, upstream);
-        });
+        thread::spawn(
+            move || {
+                WorkerActor::run(id, me2, predicate, receiver, supervisor, logger, upstream);
+            },
+        );
 
         me
     }
@@ -91,7 +94,8 @@ impl Worker {
             .unwrap();
     }
 
-    /// TODO FITZGEN
+    /// Tell the worker to try and merge the upstream's test case at the given
+    /// commit ID into its interesting (but not globally smallest) test case.
     pub fn try_merge(&self, upstream_size: u64, commit_id: git2::Oid) {
         self.sender
             .send(WorkerMessage::TryMerge(upstream_size, commit_id))
@@ -138,19 +142,33 @@ struct TryMerge<'a> {
 }
 
 impl<'a> WorkerActor<'a> {
-    fn run(id: WorkerId,
-           me: Worker,
-           predicate: Box<traits::IsInteresting>,
-           incoming: mpsc::Receiver<WorkerMessage>,
-           supervisor: Supervisor,
-           logger: Logger,
-           upstream: path::PathBuf) {
+    fn run(
+        id: WorkerId,
+        me: Worker,
+        predicate: Box<traits::IsInteresting>,
+        incoming: mpsc::Receiver<WorkerMessage>,
+        supervisor: Supervisor,
+        logger: Logger,
+        upstream: path::PathBuf,
+    ) {
         match {
                   let supervisor2 = supervisor.clone();
                   let logger2 = logger.clone();
-                  panic::catch_unwind(panic::AssertUnwindSafe(move || {
-                WorkerActor::try_run(id, me, predicate, incoming, supervisor2, logger2, upstream)
-            }))
+                  panic::catch_unwind(
+                panic::AssertUnwindSafe(
+                    move || {
+                        WorkerActor::try_run(
+                            id,
+                            me,
+                            predicate,
+                            incoming,
+                            supervisor2,
+                            logger2,
+                            upstream,
+                        )
+                    },
+                ),
+            )
               } {
             Err(p) => {
                 supervisor.worker_panicked(id, p);
@@ -162,14 +180,15 @@ impl<'a> WorkerActor<'a> {
         }
     }
 
-    fn try_run(id: WorkerId,
-               me: Worker,
-               predicate: Box<traits::IsInteresting>,
-               incoming: mpsc::Receiver<WorkerMessage>,
-               supervisor: Supervisor,
-               logger: Logger,
-               upstream: path::PathBuf)
-               -> error::Result<()> {
+    fn try_run(
+        id: WorkerId,
+        me: Worker,
+        predicate: Box<traits::IsInteresting>,
+        incoming: mpsc::Receiver<WorkerMessage>,
+        supervisor: Supervisor,
+        logger: Logger,
+        upstream: path::PathBuf,
+    ) -> error::Result<()> {
         logger.spawned_worker(id);
 
         let prefix = format!("preduce-worker-{}", id);
@@ -246,14 +265,18 @@ impl<'a> WorkerActor<'a> {
         match self.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => self.shutdown(),
             WorkerMessage::NextReduction(reduction) => {
-                Some(Test {
-                         worker: self,
-                         reduction: reduction,
-                     })
+                Some(
+                    Test {
+                        worker: self,
+                        reduction: reduction,
+                    },
+                )
             }
             otherwise => {
-                panic!("Unexpected response to next-reduction request: {:?}",
-                       otherwise);
+                panic!(
+                    "Unexpected response to next-reduction request: {:?}",
+                    otherwise
+                );
             }
         }
     }
@@ -270,10 +293,14 @@ impl<'a> Test<'a> {
             self.worker
                 .logger
                 .judged_interesting(self.worker.id, interesting.size());
-            Ok(Left(Interesting {
+            Ok(
+                Left(
+                    Interesting {
                         worker: self.worker,
                         interesting: interesting,
-                    }))
+                    },
+                ),
+            )
         } else {
             self.worker
                 .logger
@@ -292,24 +319,28 @@ impl<'a> Interesting<'a> {
         match self.worker.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => Right(self.worker.shutdown()),
             WorkerMessage::NextReduction(reduction) => {
-                Right(Some(Test {
-                               worker: self.worker,
-                               reduction: reduction,
-                           }))
+                Right(
+                    Some(
+                        Test {
+                            worker: self.worker,
+                            reduction: reduction,
+                        },
+                    ),
+                )
             }
             WorkerMessage::TryMerge(upstream_size, commit_id) => {
-                assert!(upstream_size < self.interesting.size(),
-                        "Should only merge if we are not the globally smallest test case");
-                Left(TryMerge {
-                         worker: self.worker,
-                         interesting: self.interesting,
-                         upstream_size: upstream_size,
-                         commit_id: commit_id,
-                     })
-            }
-            otherwise => {
-                panic!("Unexpected response to reporting an interesting test case: {:?}",
-                       otherwise);
+                assert!(
+                    upstream_size < self.interesting.size(),
+                    "Should only merge if we are not the globally smallest test case"
+                );
+                Left(
+                    TryMerge {
+                        worker: self.worker,
+                        interesting: self.interesting,
+                        upstream_size: upstream_size,
+                        commit_id: commit_id,
+                    },
+                )
             }
         }
     }
@@ -324,6 +355,7 @@ impl<'a> TryMerge<'a> {
         // in its stead, which seems fairly heavy for something we expect to
         // happen fairly often.
 
+        let merged;
         {
             let our_commit = self.worker.repo.head_commit()?;
 
@@ -333,20 +365,28 @@ impl<'a> TryMerge<'a> {
             self.worker
                 .repo
                 .merge_commits(&our_commit, &their_commit, None)?;
-            self.worker.repo.commit_test_case("TODO FITZGEN")?;
+
+            merged = test_case::PotentialReduction::new(
+                self.interesting,
+                "merge",
+                self.worker.repo.test_case_path()?,
+            )?;
+
+            let msg = format!("merge - {} - {}", merged.size(), merged.path().display());
+            self.worker.repo.commit_test_case(&msg)?;
         }
 
-        let merged = test_case::PotentialReduction::new(self.interesting,
-                                                        "merge",
-                                                        self.worker.repo.test_case_path()?)?;
-
-        Ok(if merged.size() < self.upstream_size {
-               Some(Test {
+        Ok(
+            if merged.size() < self.upstream_size {
+                Some(
+                    Test {
                         worker: self.worker,
                         reduction: merged,
-                    })
-           } else {
-               None
-           })
+                    },
+                )
+            } else {
+                None
+            },
+        )
     }
 }

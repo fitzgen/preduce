@@ -41,8 +41,10 @@ impl fmt::Display for Error {
                 write!(f, "Could not backup initial test case: {}", e)
             }
             Error::InitialTestCaseNotInteresting => {
-                write!(f,
-                       "The initial test case did not pass the is-interesting predicate")
+                write!(
+                    f,
+                    "The initial test case did not pass the is-interesting predicate"
+                )
             }
         }
     }
