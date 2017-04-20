@@ -173,6 +173,13 @@ impl Interesting {
     pub fn commit_id(&self) -> git2::Oid {
         self.commit_id
     }
+
+    /// Get the path to this interesting test case's repository.
+    pub fn repo_path(&self) -> path::PathBuf {
+        let mut repo = path::PathBuf::from(self.path());
+        repo.pop();
+        repo
+    }
 }
 
 /// An enumeration of the kinds of interesting test cases.

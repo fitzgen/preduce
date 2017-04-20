@@ -37,6 +37,9 @@ pub trait RepoExt {
 
     /// Get the path to the test case file within this repo.
     fn test_case_path(&self) -> error::Result<path::PathBuf>;
+
+    /// TODO FITZGEN
+    fn fetch_origin(&self) -> error::Result<()>;
 }
 
 impl RepoExt for git2::Repository {
@@ -76,6 +79,12 @@ impl RepoExt for git2::Repository {
                .parent()
                .expect(".git/ folder should always be within the root of the repo")
                .join(TEST_CASE_FILE_NAME))
+    }
+
+    fn fetch_origin(&self) -> error::Result<()> {
+        let mut origin = self.find_remote("origin")?;
+        origin.fetch(&["master"], None, None)?;
+        Ok(())
     }
 }
 

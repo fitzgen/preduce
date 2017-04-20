@@ -23,7 +23,7 @@ enum SupervisorMessage {
     RequestNextReduction(Worker),
     WorkerPanicked(WorkerId, Box<Any + Send + 'static>),
     WorkerErrored(WorkerId, error::Error),
-    ReportInteresting(test_case::Interesting),
+    ReportInteresting(Worker, test_case::Interesting),
 }
 
 /// A client handle to the supervisor actor.
@@ -45,7 +45,7 @@ impl Supervisor {
 
         let handle = thread::spawn(move || {
                                        let supervisor = Supervisor { sender: sender2 };
-                                       run(opts, supervisor, receiver)
+                                       SupervisorActor::run(opts, supervisor, receiver)
                                    });
 
         let sup = Supervisor { sender: sender };
@@ -77,7 +77,7 @@ impl Supervisor {
 
     /// Notify the supervisor that the given test case has been found to be
     /// interesting.
-    pub fn report_interesting(&self, interesting: test_case::Interesting) {
+    pub fn report_interesting(&self, who: Worker, interesting: test_case::Interesting) {
         self.sender
             .send(SupervisorMessage::ReportInteresting(interesting))
             .unwrap();
@@ -86,134 +86,206 @@ impl Supervisor {
 
 // Supervisor actor implementation.
 
-fn run<I, R>(mut opts: Options<I, R>,
-             me: Supervisor,
-             receiver: mpsc::Receiver<SupervisorMessage>)
-             -> error::Result<()>
+struct SupervisorActor<'a, I, R>
     where I: 'static + traits::IsInteresting,
           R: 'static + traits::Reducer
 {
-    let logger = Logger::spawn(io::stdout());
+    opts: Options<I, R>,
+    me: Supervisor,
+    logger: Logger,
+    repo: git::TempRepo<'a>,
+    worker_id_counter: usize,
+    workers: HashMap<WorkerId, Worker>,
+}
 
-    backup_test_case(&opts.test_case, &logger)?;
+impl<'a, I, R> SupervisorActor<'a, I, R>
+    where I: 'static + traits::IsInteresting,
+          R: 'static + traits::Reducer
+{
+    fn run(opts: Options<I, R>,
+           me: Supervisor,
+           incoming: mpsc::Receiver<SupervisorMessage>)
+           -> error::Result<()> {
+        let repodir = tempdir::TempDir::new("preduce-supervisor")?;
+        let repo = git::TempRepo::new(&repodir)?;
 
-    let repodir = tempdir::TempDir::new("preduce-supervisor")?;
-    let repo = git::TempRepo::new(&repodir)?;
-    let mut smallest_interesting = verify_initially_interesting(&mut opts, &repo)?;
-    let orig_size = smallest_interesting.size();
+        let num_workers = opts.num_workers();
+        let mut supervisor = SupervisorActor {
+            opts: opts,
+            me: me,
+            logger: Logger::spawn(io::stdout()),
+            repo: repo,
+            worker_id_counter: 0,
+            workers: HashMap::with_capacity(num_workers),
+        };
 
-    let mut workers = spawn_workers(&opts, me, logger.clone(), repo.path());
+        supervisor.backup_original_test_case()?;
 
-    for msg in receiver {
-        match msg {
-            SupervisorMessage::WorkerErrored(id, err) => {
-                logger.worker_errored(id, err);
-                let worker = workers.remove(&id);
-                assert!(worker.is_some());
-                // TODO FITZGEN: spawn a new worker
-            }
-            SupervisorMessage::WorkerPanicked(id, panic) => {
-                logger.worker_panicked(id, panic);
-                let worker = workers.remove(&id);
-                assert!(worker.is_some());
-                // TODO FITZGEN: spawn a new worker
-            }
-            SupervisorMessage::RequestNextReduction(who) => {
-                logger.start_generating_next_reduction();
-                if let Some(reduction) = opts.reducer().next_potential_reduction()? {
-                    logger.finish_generating_next_reduction();
-                    who.next_reduction_response(reduction);
-                } else {
-                    logger.no_more_reductions();
-                    let worker = workers.remove(&who.id());
-                    who.shutdown();
-                    assert!(worker.is_some());
-                }
-            }
-            SupervisorMessage::ReportInteresting(interesting) => {
-                let old_size = smallest_interesting.size();
-                let new_size = interesting.size();
-                if new_size < old_size {
-                    // TODO FITZGEN: fetch the worker's repo, reset our HEAD to
-                    // the worker's repo's HEAD.
-
-                    smallest_interesting = interesting;
-                    opts.reducer().set_seed(smallest_interesting.clone());
-
-                    // TODO FITZGEN: if workers.len() < opts.num_workers(),
-                    // spawn more workers.
-
-                    fs::copy(smallest_interesting.path(), &opts.test_case)?;
-                    logger.new_smallest(new_size, orig_size);
-                } else {
-                    logger.is_not_smaller();
-                    // TODO FITZGEN: send it back to the worker to attempt to
-                    // merge this interesting test case with the smallest
-                    // interesting test case.
-                }
-            }
-        }
-
-        if workers.is_empty() {
-            assert!(opts.reducer().next_potential_reduction()?.is_none());
-            break;
-        }
+        supervisor.spawn_workers();
+        let initial_interesting = supervisor.verify_initially_interesting()?;
+        supervisor.run_loop(incoming, initial_interesting)
     }
 
-    logger.final_reduced_size(smallest_interesting.size(), orig_size);
-    Ok(())
-}
+    /// TODO FITZGEN
+    fn run_loop(&mut self,
+                incoming: mpsc::Receiver<SupervisorMessage>,
+                initial_interesting: test_case::Interesting)
+                -> error::Result<()> {
+        let mut smallest_interesting = initial_interesting;
+        let orig_size = smallest_interesting.size();
 
-fn verify_initially_interesting<I, R>(opts: &mut Options<I, R>,
-                                      repo: &git2::Repository)
-                                      -> error::Result<test_case::Interesting>
-    where I: 'static + traits::IsInteresting,
-          R: 'static + traits::Reducer
-{
-    let initial = test_case::Interesting::initial(&opts.test_case, opts.predicate(), &repo)?
-        .ok_or(error::Error::InitialTestCaseNotInteresting)?;
-    opts.reducer().set_seed(initial.clone());
-    Ok(initial)
-}
+        for msg in incoming {
+            match msg {
+                SupervisorMessage::WorkerErrored(id, err) => {
+                    self.logger.worker_errored(id, err);
+                    self.restart_worker(id);
+                }
 
-fn backup_test_case(test_case: &path::Path, logger: &Logger) -> error::Result<()> {
-    let mut backup_path = path::PathBuf::from(test_case);
-    let mut file_name = test_case.file_name()
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
-        .ok_or_else(|| {
-                        let e = io::Error::new(io::ErrorKind::Other,
-                                   "test case path must exist and representable in utf-8");
-                        error::Error::TestCaseBackupFailure(e)
-                    })?;
-    file_name.push_str(".orig");
-    backup_path.set_file_name(file_name);
+                SupervisorMessage::WorkerPanicked(id, panic) => {
+                    self.logger.worker_panicked(id, panic);
+                    self.restart_worker(id);
+                }
 
-    logger.backing_up_test_case(test_case, &backup_path);
+                SupervisorMessage::RequestNextReduction(who) => {
+                    self.send_next_reduction_to(who)?;
+                }
 
-    fs::copy(test_case, backup_path)
-        .map_err(error::Error::TestCaseBackupFailure)?;
+                SupervisorMessage::ReportInteresting(who, interesting) => {
+                    self.handle_new_interesting_test_case(who,
+                                                          orig_size,
+                                                          &mut smallest_interesting,
+                                                          interesting)?;
+                }
+            }
 
-    Ok(())
-}
+            if self.workers.is_empty() {
+                assert!(self.opts
+                            .reducer()
+                            .next_potential_reduction()?
+                            .is_none());
+                break;
+            }
+        }
 
-fn spawn_workers<I, R>(opts: &Options<I, R>,
-                       me: Supervisor,
-                       logger: Logger,
-                       upstream: &path::Path)
-                       -> HashMap<WorkerId, Worker>
-    where I: 'static + traits::IsInteresting,
-          R: 'static + traits::Reducer
-{
-    (0..opts.num_workers())
-        .map(|i| {
-            let id = WorkerId::new(i);
-            let worker = Worker::spawn(id,
-                                       opts.predicate().clone(),
-                                       me.clone(),
-                                       logger.clone(),
-                                       upstream);
-            (id, worker)
-        })
-        .collect()
+        self.logger
+            .final_reduced_size(smallest_interesting.size(), orig_size);
+        Ok(())
+    }
+
+    /// TODO FITZGEN
+    fn restart_worker(&mut self, id: WorkerId) {
+        let old_worker = self.workers.remove(&id);
+        assert!(old_worker.is_some());
+
+        self.spawn_workers();
+    }
+
+    /// TODO FITZGEN
+    fn send_next_reduction_to(&mut self, who: Worker) -> error::Result<()> {
+        assert!(self.workers.contains_key(&who.id()));
+        self.logger.start_generating_next_reduction();
+
+        if let Some(reduction) = self.opts.reducer().next_potential_reduction()? {
+            self.logger.finish_generating_next_reduction();
+            who.next_reduction(reduction);
+        } else {
+            self.logger.no_more_reductions();
+
+            let old_worker = self.workers.remove(&who.id());
+            assert!(old_worker.is_some());
+
+            who.shutdown();
+        }
+
+        Ok(())
+    }
+
+    /// TODO FITZGEN
+    fn handle_new_interesting_test_case(&mut self,
+                                        who: Worker,
+                                        orig_size: u64,
+                                        smallest_interesting: &mut test_case::Interesting,
+                                        interesting: test_case::Interesting)
+                                        -> error::Result<()> {
+        let old_size = smallest_interesting.size();
+        let new_size = interesting.size();
+
+        if new_size < old_size {
+            // TODO FITZGEN: fetch the worker's repo, reset our HEAD to
+            // the worker's repo's HEAD.
+            let mut remote = interesting.repo_path();
+            let remote = remote.to_string_lossy();
+            let remote = self.repo.remote_anonymous(&remote)?;
+
+            *smallest_interesting = interesting;
+            self.opts
+                .reducer()
+                .set_seed(smallest_interesting.clone());
+            fs::copy(smallest_interesting.path(), &self.opts.test_case)?;
+            self.logger.new_smallest(new_size, orig_size);
+
+            self.send_next_reduction_to(who)?;
+            self.spawn_workers();
+        } else {
+            // Although the test case is interesting, it is not smaller. Tell
+            // the worker to try and merge it with our current smallest
+            // interesting test case and see if that is also interesting and
+            // even smaller.
+            self.logger.is_not_smaller();
+            who.try_merge(old_size, self.repo.head_id());
+        }
+
+        Ok(())
+    }
+
+    /// TODO FITZGEN
+    fn backup_original_test_case(&self) -> error::Result<()> {
+        let mut backup_path = path::PathBuf::from(&self.opts.test_case);
+        let mut file_name = self.opts.test_case.file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| {
+                let e = io::Error::new(io::ErrorKind::Other,
+                                       "test case path must exist and representable in utf-8");
+                error::Error::TestCaseBackupFailure(e)
+            })?;
+        file_name.push_str(".orig");
+        backup_path.set_file_name(file_name);
+
+        self.logger
+            .backing_up_test_case(&self.opts.test_case, &backup_path);
+
+        fs::copy(&self.opts.test_case, backup_path)
+            .map_err(error::Error::TestCaseBackupFailure)?;
+
+        Ok(())
+    }
+
+    /// TODO FITZGEN
+    fn verify_initially_interesting(&mut self) -> error::Result<test_case::Interesting> {
+        let initial = test_case::Interesting::initial(&self.opts.test_case,
+                                                      self.opts.predicate(),
+                                                      &self.repo)?
+                .ok_or(error::Error::InitialTestCaseNotInteresting)?;
+        self.opts.reducer().set_seed(initial.clone());
+        Ok(initial)
+    }
+
+    /// TODO FITZGEN
+    fn spawn_workers(&mut self) {
+        let new_workers: Vec<_> = (self.workers.len()..self.opts.num_workers())
+            .map(|_| {
+                let id = WorkerId::new(self.worker_id_counter);
+                self.worker_id_counter += 1;
+
+                let worker = Worker::spawn(id,
+                                           self.opts.predicate().clone(),
+                                           self.me.clone(),
+                                           self.logger.clone(),
+                                           self.repo.path());
+                (id, worker)
+            })
+            .collect();
+        self.workers.extend(new_workers);
+    }
 }

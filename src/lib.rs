@@ -12,6 +12,7 @@
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
 
+extern crate either;
 extern crate git2;
 extern crate tempdir;
 extern crate num_cpus;

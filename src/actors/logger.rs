@@ -84,7 +84,10 @@ impl fmt::Display for LoggerMessage {
                 } else {
                     (final_size as f64) / (orig_size as f64) * 100.0
                 };
-                write!(f, "Supervisor: final reduced size is {} bytes ({:.2}%)", final_size, percent)
+                write!(f,
+                       "Supervisor: final reduced size is {} bytes ({:.2}%)",
+                       final_size,
+                       percent)
             }
         }
     }
@@ -223,7 +226,9 @@ impl Logger {
     /// completed.
     pub fn final_reduced_size(&self, final_size: u64, orig_size: u64) {
         assert!(final_size <= orig_size);
-        self.sender.send(LoggerMessage::FinalReducedSize(final_size, orig_size)).unwrap();
+        self.sender
+            .send(LoggerMessage::FinalReducedSize(final_size, orig_size))
+            .unwrap();
     }
 }
 
