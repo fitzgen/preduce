@@ -12,6 +12,7 @@
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
 
+extern crate either;
 extern crate git2;
 extern crate tempdir;
 extern crate num_cpus;
@@ -49,19 +50,21 @@ use std::path;
 /// ```
 #[derive(Clone, Debug)]
 pub struct Options<I, R>
-    where I: traits::IsInteresting,
-          R: traits::Reducer
+where
+    I: traits::IsInteresting,
+    R: traits::Reducer,
 {
     test_case: path::PathBuf,
     is_interesting: I,
     reducer: R,
-    workers: usize,
+    workers: usize
 }
 
 /// APIs for configuring options and spawning the reduction process.
 impl<I, R> Options<I, R>
-    where I: 'static + traits::IsInteresting,
-          R: 'static + traits::Reducer
+where
+    I: 'static + traits::IsInteresting,
+    R: 'static + traits::Reducer,
 {
     /// Construct a new `Options` builder.
     ///
@@ -76,13 +79,14 @@ impl<I, R> Options<I, R>
     /// # let _ = opts;
     /// ```
     pub fn new<P>(is_interesting: I, reducer: R, test_case: P) -> Options<I, reducers::Fuse<R>>
-        where P: Into<path::PathBuf>
+    where
+        P: Into<path::PathBuf>,
     {
         Options {
             test_case: test_case.into(),
             is_interesting: is_interesting,
             reducer: reducers::Fuse::new(reducer),
-            workers: num_cpus::get(),
+            workers: num_cpus::get()
         }
     }
 
@@ -124,7 +128,7 @@ impl<I, R> Options<I, R>
     /// # }
     /// ```
     pub fn run(self) -> error::Result<()> {
-        let (_, handle) = actors::Supervisor::spawn(self);
+        let (_, handle) = actors::Supervisor::spawn(self)?;
         handle.join()??;
         Ok(())
     }
@@ -132,8 +136,9 @@ impl<I, R> Options<I, R>
 
 /// APIs for accessing the `Options`' configured settings.
 impl<I, R> Options<I, R>
-    where I: 'static + traits::IsInteresting,
-          R: 'static + traits::Reducer
+where
+    I: 'static + traits::IsInteresting,
+    R: 'static + traits::Reducer,
 {
     /// Get the number of workers this `Options` is configured to use.
     pub fn num_workers(&self) -> usize {

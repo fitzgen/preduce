@@ -25,7 +25,7 @@ pub enum Error {
     TestCaseBackupFailure(io::Error),
 
     /// The initial test case did not pass the is-interesting predicate.
-    InitialTestCaseNotInteresting,
+    InitialTestCaseNotInteresting
 }
 
 impl fmt::Display for Error {
@@ -41,8 +41,10 @@ impl fmt::Display for Error {
                 write!(f, "Could not backup initial test case: {}", e)
             }
             Error::InitialTestCaseNotInteresting => {
-                write!(f,
-                       "The initial test case did not pass the is-interesting predicate")
+                write!(
+                    f,
+                    "The initial test case did not pass the is-interesting predicate"
+                )
             }
         }
     }

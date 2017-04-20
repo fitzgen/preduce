@@ -5,9 +5,9 @@ use error;
 use git2;
 use std::fmt;
 use std::fs;
-use std::marker;
 use std::ops;
 use std::path;
+use std::sync::Arc;
 use tempdir;
 
 /// The file name for test cases within a git repository.
@@ -37,6 +37,13 @@ pub trait RepoExt {
 
     /// Get the path to the test case file within this repo.
     fn test_case_path(&self) -> error::Result<path::PathBuf>;
+
+    /// Fetch the origin remote.
+    fn fetch_origin(&self) -> error::Result<()>;
+
+    /// Fetch the remote and reset this repository to the given commit id.
+    fn fetch_and_reset_hard<P>(&self, remote: P, commit_id: git2::Oid) -> error::Result<()>
+        where P: AsRef<path::Path>;
 }
 
 impl RepoExt for git2::Repository {
@@ -71,35 +78,62 @@ impl RepoExt for git2::Repository {
     }
 
     fn test_case_path(&self) -> error::Result<path::PathBuf> {
-        Ok(self.path()
-               .canonicalize()?
-               .parent()
-               .expect(".git/ folder should always be within the root of the repo")
-               .join(TEST_CASE_FILE_NAME))
+        Ok(
+            self.path()
+                .canonicalize()?
+                .parent()
+                .expect(".git/ folder should always be within the root of the repo")
+                .join(TEST_CASE_FILE_NAME)
+        )
+    }
+
+    fn fetch_origin(&self) -> error::Result<()> {
+        let mut origin = self.find_remote("origin")?;
+        origin.fetch(&["master"], None, None)?;
+        Ok(())
+    }
+
+    fn fetch_and_reset_hard<P>(&self, remote: P, commit_id: git2::Oid) -> error::Result<()>
+        where P: AsRef<path::Path>
+    {
+        let remote = remote.as_ref();
+        let remote = remote.to_string_lossy();
+        let mut remote = self.remote_anonymous(&remote)?;
+        remote.fetch(&["master"], None, None)?;
+        let object = self
+            .find_object(commit_id, Some(git2::ObjectType::Commit))?;
+        self.reset(&object, git2::ResetType::Hard, None)?;
+        Ok(())
     }
 }
 
 /// A temporary git repository.
-pub struct TempRepo<'a>(git2::Repository, marker::PhantomData<&'a tempdir::TempDir>);
+pub struct TempRepo {
+    // Only an `Option` so we can force its destruction before the temp dir
+    // disappears under its feet.
+    repo: Option<git2::Repository>,
+    _dir: Arc<tempdir::TempDir>,
+}
 
-impl<'a> fmt::Debug for TempRepo<'a> {
+impl fmt::Debug for TempRepo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "TempRepo({})", self.path().display())
     }
 }
 
-impl<'a> ops::Deref for TempRepo<'a> {
+impl ops::Deref for TempRepo {
     type Target = git2::Repository;
 
     fn deref(&self) -> &git2::Repository {
-        &self.0
+        self.repo.as_ref().unwrap()
     }
 }
 
-impl<'a> TempRepo<'a> {
+impl TempRepo {
     /// Create a new temporary git repository, with an initial commit
     /// introducing an empty test case file within it.
-    pub fn new(dir: &'a tempdir::TempDir) -> error::Result<TempRepo<'a>> {
+    pub fn new(prefix: &str) -> error::Result<TempRepo> {
+        let dir = Arc::new(tempdir::TempDir::new(prefix)?);
         let repo = git2::Repository::init(dir.path())?;
 
         {
@@ -118,15 +152,31 @@ impl<'a> TempRepo<'a> {
             repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])?;
         }
 
-        Ok(TempRepo(repo, marker::PhantomData))
+        Ok(TempRepo {
+            repo: Some(repo),
+            _dir: dir,
+        })
     }
 
     /// Create a temporary clone repository of a local upstream git repository.
-    pub fn clone<P>(upstream: P, dir: &'a tempdir::TempDir) -> error::Result<TempRepo<'a>>
-        where P: AsRef<path::Path>
+    pub fn clone<P>(upstream: P, prefix: &str) -> error::Result<TempRepo>
+    where
+        P: AsRef<path::Path>,
     {
         let upstream = upstream.as_ref().to_string_lossy();
+        let dir = Arc::new(tempdir::TempDir::new(prefix)?);
         let repo = git2::Repository::clone(&upstream, dir.path())?;
-        Ok(TempRepo(repo, marker::PhantomData))
+        Ok(TempRepo {
+            repo: Some(repo),
+            _dir: dir,
+        })
+    }
+}
+
+impl Drop for TempRepo {
+    fn drop(&mut self) {
+        // Make sure we drop the git repo before the temporary directory goes
+        // away.
+        drop(self.repo.take());
     }
 }

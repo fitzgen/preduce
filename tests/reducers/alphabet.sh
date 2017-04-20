@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 function gen {
-    read -r ignored
-    echo $1 > "alphabet-$1"
-    echo "alphabet-$1"
+    read -r path
+    echo $1 > "$path"
+    echo
 }
 
 gen "a"
