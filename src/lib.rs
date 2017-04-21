@@ -128,7 +128,7 @@ where
     /// # }
     /// ```
     pub fn run(self) -> error::Result<()> {
-        let (_, handle) = actors::Supervisor::spawn(self);
+        let (_, handle) = actors::Supervisor::spawn(self)?;
         handle.join()??;
         Ok(())
     }

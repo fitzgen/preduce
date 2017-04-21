@@ -55,7 +55,7 @@ impl Worker {
         supervisor: Supervisor,
         logger: Logger,
         upstream: &path::Path,
-    ) -> Self {
+    ) -> error::Result<Worker> {
         logger.spawning_worker(id);
 
         let upstream = upstream.into();
@@ -67,13 +67,15 @@ impl Worker {
         };
         let me2 = me.clone();
 
-        thread::spawn(
-            move || {
-                WorkerActor::run(id, me2, predicate, receiver, supervisor, logger, upstream);
-            },
-        );
+        thread::Builder::new()
+            .name(format!("preduce-worker-{}", id))
+            .spawn(
+                move || {
+                    WorkerActor::run(id, me2, predicate, receiver, supervisor, logger, upstream);
+                },
+            )?;
 
-        me
+        Ok(me)
     }
 
     /// Get the id of this worker.
@@ -290,6 +292,19 @@ impl<'a> Test<'a> {
         let maybe_interesting = self.reduction
             .into_interesting(&self.worker.predicate, &self.worker.repo)?;
         if let Some(interesting) = maybe_interesting {
+            // TODO FITZGEN
+            println!("===================================================");
+            ::std::process::Command::new("git")
+                .args(&["diff", "HEAD^"])
+                .current_dir({
+                    let mut repo_path = ::std::path::PathBuf::from(self.worker.repo.path());
+                    repo_path.pop();
+                    repo_path
+                })
+                .status()
+                .unwrap();
+            println!("===================================================");
+
             self.worker
                 .logger
                 .judged_interesting(self.worker.id, interesting.size());
@@ -330,8 +345,8 @@ impl<'a> Interesting<'a> {
             }
             WorkerMessage::TryMerge(upstream_size, commit_id) => {
                 assert!(
-                    upstream_size < self.interesting.size(),
-                    "Should only merge if we are not the globally smallest test case"
+                    upstream_size <= self.interesting.size(),
+                    "Should only merge if we are not the new globally smallest test case"
                 );
                 Left(
                     TryMerge {
@@ -355,6 +370,10 @@ impl<'a> TryMerge<'a> {
         // in its stead, which seems fairly heavy for something we expect to
         // happen fairly often.
 
+        self.worker
+            .logger
+            .try_merging(self.worker.id, self.commit_id, self.interesting.commit_id());
+
         let merged;
         {
             let our_commit = self.worker.repo.head_commit()?;
@@ -376,17 +395,29 @@ impl<'a> TryMerge<'a> {
             self.worker.repo.commit_test_case(&msg)?;
         }
 
-        Ok(
-            if merged.size() < self.upstream_size {
+        self.worker
+            .logger
+            .finished_merging(self.worker.id, merged.size(), self.upstream_size);
+
+        if merged.size() < self.upstream_size {
+            Ok(
                 Some(
                     Test {
                         worker: self.worker,
                         reduction: merged,
                     },
-                )
-            } else {
-                None
-            },
-        )
+                ),
+            )
+        } else {
+            {
+                let object = self.worker
+                    .repo
+                    .find_object(self.commit_id, Some(git2::ObjectType::Commit))?;
+                self.worker
+                    .repo
+                    .reset(&object, git2::ResetType::Hard, None)?;
+            }
+            Ok(self.worker.get_next_reduction())
+        }
     }
 }

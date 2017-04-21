@@ -118,6 +118,8 @@ impl Script {
     }
 
     fn kill_child(&mut self) {
+        println!("FITZGEN: reducers::Script::kill_child");
+
         if let Some(mut child) = self.child.take() {
             let _ = child.kill();
         }
@@ -134,6 +136,7 @@ impl Drop for Script {
 
 impl Reducer for Script {
     fn set_seed(&mut self, seed: test_case::Interesting) {
+        println!("FITZGEN: reducers::Script::set_seed");
         self.seed = Some(seed);
 
         // If we have an extant child process, kill it now. We'll start a new
@@ -143,6 +146,8 @@ impl Reducer for Script {
     }
 
     fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
+        println!("FITZGEN: reducers::Script::next_potential_reduction");
+
         assert!(
             self.seed.is_some(),
             "Must be initialized with calls to set_seed before asking for potential \
@@ -155,19 +160,30 @@ impl Reducer for Script {
 
         assert!(self.child.is_some() && self.child_stdout.is_some() && self.out_dir.is_some());
 
-        // Write a newline to the child's stdin.
-        let mut child = self.child.as_mut().unwrap();
-        write!(child.stdin.as_mut().unwrap(), "\n")?;
+        // Write a newline to the child's stdin. If this fails, then the child
+        // already exited, presumably because it determined it could not
+        // generate any reductions from the test file.
+        if {
+               let mut child = self.child.as_mut().unwrap();
+               let mut stdin = child.stdin.as_mut().unwrap();
+               write!(stdin, "\n").is_err()
+        } {
+            println!("FITZGEN: writing to stdin did not work");
+            self.kill_child();
+            return Ok(None);
+        }
 
         // Read the path of the next potential reduction from the child's
         // stdout.
         let mut child_stdout = self.child_stdout.as_mut().unwrap();
         let mut path = String::new();
         if child_stdout.read_line(&mut path).is_err() {
+            println!("FITZGEN: reading a line did not work");
             return Ok(None);
         }
 
         if path.is_empty() {
+            println!("FITZGEN: path is empty");
             return Ok(None);
         }
 
@@ -215,6 +231,20 @@ impl Reducer for Script {
             self.program.to_string_lossy(),
             path,
         )?;
+
+        // TODO FITZGEN
+        //
+        // let seed_size = self.seed.as_ref().unwrap().size();
+        // if reduction.size() >= seed_size {
+        //     let details = format!(
+        //         "'{}' is generating reductions that are greater than or equal the seed's size: {} bytes >= {} bytes",
+        //         self.program.to_string_lossy(),
+        //         reduction.size(),
+        //         seed_size
+        //     );
+        //     return Err(error::Error::MisbehavingReducerScript(details));
+        // }
+
         Ok(Some(reduction))
     }
 }

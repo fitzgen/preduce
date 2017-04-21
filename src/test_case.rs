@@ -15,6 +15,9 @@ pub trait TestCaseMethods {
 
     /// Get the size (in bytes) of this test case.
     fn size(&self) -> u64;
+
+    /// Get the provenance of this test case.
+    fn provenance(&self) -> Option<&str>;
 }
 
 /// A test case with potential: it may or may not be smaller than our smallest
@@ -42,6 +45,10 @@ impl TestCaseMethods for PotentialReduction {
 
     fn size(&self) -> u64 {
         self.size
+    }
+
+    fn provenance(&self) -> Option<&str> {
+        Some(&self.provenance)
     }
 }
 
@@ -73,6 +80,35 @@ impl PotentialReduction {
         assert!(path.is_file());
 
         let size = fs::metadata(&path)?.len();
+        {
+            use std::io::Read;
+
+            println!("=======================================================================");
+            println!("=======================================================================");
+            println!("=======================================================================");
+
+            println!("FITZGEN: seed path = {}", seed.path().display());
+            let mut file = fs::File::open(seed.path()).unwrap();
+            let mut buf = vec![];
+            file.read_to_end(&mut buf).unwrap();
+            assert_eq!(buf.len() as u64, seed.size());
+
+            println!("FITZGEN: seed size = {}", seed.size());
+            println!("{}", ::std::str::from_utf8(&buf).unwrap());
+            println!("=======================================================================");
+
+            println!("FITZGEN: reduction path = {}", path.display());
+            file = fs::File::open(&path).unwrap();
+            buf.clear();
+            file.read_to_end(&mut buf).unwrap();
+            assert_eq!(buf.len() as u64, size);
+
+            println!("FITZGEN: reduction size = {}", size);
+            println!("{}", ::std::str::from_utf8(&buf).unwrap());
+            println!("=======================================================================");
+            println!("=======================================================================");
+            println!("=======================================================================");
+        }
 
         Ok(
             PotentialReduction {
@@ -145,6 +181,10 @@ impl TestCaseMethods for Interesting {
 
     fn size(&self) -> u64 {
         self.kind.size()
+    }
+
+    fn provenance(&self) -> Option<&str> {
+        self.kind.provenance()
     }
 }
 
@@ -273,6 +313,13 @@ impl TestCaseMethods for InterestingKind {
             InterestingKind::Reduction(ref reduction) => reduction.size(),
         }
     }
+
+    fn provenance(&self) -> Option<&str> {
+        match *self {
+            InterestingKind::Initial(ref i) => i.provenance(),
+            InterestingKind::Reduction(ref r) => r.provenance(),
+        }
+    }
 }
 
 /// The initial test case, after it has been validated to have passed the
@@ -293,6 +340,10 @@ impl TestCaseMethods for InitialInteresting {
 
     fn size(&self) -> u64 {
         self.size
+    }
+
+    fn provenance(&self) -> Option<&str> {
+        None
     }
 }
 

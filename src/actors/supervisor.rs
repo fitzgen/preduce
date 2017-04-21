@@ -35,7 +35,8 @@ pub struct Supervisor {
 impl Supervisor {
     /// Spawn the supervisor thread, which will in turn spawn workers and start
     /// the test case reduction process.
-    pub fn spawn<I, R>(opts: Options<I, R>) -> (Supervisor, thread::JoinHandle<error::Result<()>>)
+    pub fn spawn<I, R>(opts: Options<I, R>,)
+        -> error::Result<(Supervisor, thread::JoinHandle<error::Result<()>>)>
     where
         I: 'static + traits::IsInteresting,
         R: 'static + traits::Reducer,
@@ -43,16 +44,18 @@ impl Supervisor {
         let (sender, receiver) = mpsc::channel();
         let sender2 = sender.clone();
 
-        let handle = thread::spawn(
-            move || {
-                let supervisor = Supervisor { sender: sender2 };
-                SupervisorActor::run(opts, supervisor, receiver)
-            },
-        );
+        let handle = thread::Builder::new()
+            .name(format!("preduce-supervisor"))
+            .spawn(
+                move || {
+                    let supervisor = Supervisor { sender: sender2 };
+                    SupervisorActor::run(opts, supervisor, receiver)
+                },
+            )?;
 
         let sup = Supervisor { sender: sender };
 
-        (sup, handle)
+        Ok((sup, handle))
     }
 
     /// Request the next potentially-interesting test case reduction. The
@@ -96,6 +99,7 @@ where
     opts: Options<I, R>,
     me: Supervisor,
     logger: Logger,
+    logger_handle: thread::JoinHandle<()>,
     repo: git::TempRepo<'a>,
     worker_id_counter: usize,
     workers: HashMap<WorkerId, Worker>,
@@ -115,10 +119,12 @@ where
         let repo = git::TempRepo::new(&repodir)?;
 
         let num_workers = opts.num_workers();
+        let (logger, logger_handle) = Logger::spawn(io::stdout())?;
         let mut supervisor = SupervisorActor {
             opts: opts,
             me: me,
-            logger: Logger::spawn(io::stdout()),
+            logger: logger,
+            logger_handle: logger_handle,
             repo: repo,
             worker_id_counter: 0,
             workers: HashMap::with_capacity(num_workers),
@@ -126,7 +132,7 @@ where
 
         supervisor.backup_original_test_case()?;
 
-        supervisor.spawn_workers();
+        supervisor.spawn_workers()?;
         let initial_interesting = supervisor.verify_initially_interesting()?;
         supervisor.run_loop(incoming, initial_interesting)
     }
@@ -134,26 +140,31 @@ where
     /// Run the supervisor's main loop, serving reductions to workers, and
     /// keeping track of the globally smallest interesting test case.
     fn run_loop(
-        &mut self,
+        mut self,
         incoming: mpsc::Receiver<SupervisorMessage>,
         initial_interesting: test_case::Interesting,
     ) -> error::Result<()> {
         let mut smallest_interesting = initial_interesting;
         let orig_size = smallest_interesting.size();
+        println!("FITZGEN: orig_size = {}", orig_size);
 
         for msg in incoming {
             match msg {
                 SupervisorMessage::WorkerErrored(id, err) => {
                     self.logger.worker_errored(id, err);
-                    self.restart_worker(id);
+                    self.restart_worker(id)?;
                 }
 
                 SupervisorMessage::WorkerPanicked(id, panic) => {
                     self.logger.worker_panicked(id, panic);
-                    self.restart_worker(id);
+                    self.restart_worker(id)?;
                 }
 
                 SupervisorMessage::RequestNextReduction(who) => {
+                    println!(
+                        "FITZGEN: smallest interesting reduction is {}",
+                        smallest_interesting.size()
+                    );
                     self.send_next_reduction_to(who)?;
                 }
 
@@ -178,18 +189,37 @@ where
             }
         }
 
+        self.shutdown(smallest_interesting, orig_size)
+    }
+
+    /// TODO FITZGEN
+    fn shutdown(
+        self,
+        smallest_interesting: test_case::Interesting,
+        orig_size: u64,
+    ) -> error::Result<()> {
         self.logger
             .final_reduced_size(smallest_interesting.size(), orig_size);
+        drop(self.logger);
+        self.logger_handle.join()?;
+
+        println!("git log --graph");
+        ::std::process::Command::new("git")
+            .args(&["log", "--graph"])
+            .current_dir(self.repo.path())
+            .status()
+            .unwrap();
+
         Ok(())
     }
 
     /// Given that the worker with the given id panicked or errored out, clean
     /// up after it and spawn a replacement for it.
-    fn restart_worker(&mut self, id: WorkerId) {
+    fn restart_worker(&mut self, id: WorkerId) -> error::Result<()> {
         let old_worker = self.workers.remove(&id);
         assert!(old_worker.is_some());
 
-        self.spawn_workers();
+        self.spawn_workers()
     }
 
     /// Generate the next reduction and send it to the given worker, or shutdown
@@ -199,6 +229,29 @@ where
         self.logger.start_generating_next_reduction();
 
         if let Some(reduction) = self.opts.reducer().next_potential_reduction()? {
+            println!(
+                "FITZGEN: next potential reduction size is {}",
+                reduction.size()
+            );
+            println!(
+                "FITZGEN: next potential reduction path is {}",
+                reduction.path().display()
+            );
+            ::std::process::Command::new("diff")
+                .args(
+                    &[
+                        self.repo
+                            .test_case_path()
+                            .unwrap()
+                            .display()
+                            .to_string(),
+                        reduction.path().display().to_string(),
+                        "-U3".into(),
+                    ],
+                )
+                .status()
+                .unwrap();
+
             self.logger.finish_generating_next_reduction();
             who.next_reduction(reduction);
         } else {
@@ -224,8 +277,8 @@ where
         smallest_interesting: &mut test_case::Interesting,
         interesting: test_case::Interesting,
     ) -> error::Result<()> {
-        let old_size = smallest_interesting.size();
         let new_size = interesting.size();
+        let old_size = smallest_interesting.size();
 
         if new_size < old_size {
             // We have a new globally smallest insteresting test case! First,
@@ -237,27 +290,40 @@ where
             self.logger.new_smallest(new_size, orig_size);
 
             // Second, reset our repo's HEAD to the new interesting test case's
-            // commit. When we reseed the reducer, we want it to be reducing the
-            // supervisor's copy of the test case, not the worker's copy, which
-            // will change as it gets new reductions to test.
+            // commit. When we re-seed the reducer, we want it to be reducing
+            // the supervisor's copy of the test case, not the worker's copy,
+            // which will change as it gets new reductions to test.
             *smallest_interesting = interesting.clone_by_resetting_into_repo(&self.repo)?;
 
-            // Third, reseed our reducer with the new test case, send new work
+            // Third, re-seed our reducer with the new test case, send new work
             // to the reporting worker, and respawn any workers that might have
             // shutdown because we exhausted all possible reductions on the
             // previous smallest interesting test case.
             self.opts
                 .reducer()
                 .set_seed(smallest_interesting.clone());
+            println!(
+                "FITZGEN: smallest interesting reduction is {}",
+                smallest_interesting.size()
+            );
             self.send_next_reduction_to(who)?;
-            self.spawn_workers();
+            self.spawn_workers()?;
         } else {
             // Although the test case is interesting, it is not smaller. Tell
             // the worker to try and merge it with our current smallest
             // interesting test case and see if that is also interesting and
-            // even smaller.
+            // even smaller. Unless it is already a merge, in which case, we
+            // abandon this thread of traversal.
             self.logger.is_not_smaller();
-            who.try_merge(old_size, self.repo.head_id()?);
+            if interesting.provenance() == Some("merge") {
+                println!(
+                    "FITZGEN: smallest interesting reduction is {}",
+                    smallest_interesting.size()
+                );
+                self.send_next_reduction_to(who)?;
+            } else {
+                who.try_merge(old_size, self.repo.head_id()?);
+            }
         }
 
         Ok(())
@@ -309,8 +375,13 @@ where
 
     /// Spawn (or re-spawn) workers until we have the number of active,
     /// concurrent workers originally requested in the `Options`.
-    fn spawn_workers(&mut self) {
-        let new_workers: Vec<_> = (self.workers.len()..self.opts.num_workers())
+    fn spawn_workers(&mut self) -> error::Result<()> {
+        println!(
+            "FITZGEN: SupervisorActor::spawn_workers: need {} more workers",
+            self.opts.num_workers() - self.workers.len()
+        );
+
+        let new_workers: error::Result<Vec<_>> = (self.workers.len()..self.opts.num_workers())
             .map(
                 |_| {
                     let id = WorkerId::new(self.worker_id_counter);
@@ -322,11 +393,13 @@ where
                         self.me.clone(),
                         self.logger.clone(),
                         self.repo.path(),
-                    );
-                    (id, worker)
+                    )?;
+                    Ok((id, worker))
                 },
             )
             .collect();
+        let new_workers = new_workers?;
         self.workers.extend(new_workers);
+        Ok(())
     }
 }
