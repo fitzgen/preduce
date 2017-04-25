@@ -4,9 +4,10 @@ extern crate rand;
 
 use error;
 use std::ffi;
-use std::io::{self, BufRead, Write};
+use std::io::{Read, Write};
 use std::path;
 use std::process;
+use std::sync::Arc;
 use tempdir;
 use test_case::{self, TestCaseMethods};
 use traits::Reducer;
@@ -18,15 +19,14 @@ use traits::Reducer;
 /// The seed test case is given as the first and only argument to the script.
 ///
 /// When `preduce` would like the next potential reduction of the seed test case
-/// to be generated, it will write a '\n' byte to `stdin`. Upon reading this
-/// newline, the script should generate the next reduction at a unique path
-/// within its current directory, and print this path followed by a '\n' to
-/// `stdout`. Alternatively, if the subprocess has exhausted all of its
-/// potential reductions, then it may simply exit without printing anything.
+/// to be generated, it will write a file path followed by a '\n' byte to
+/// `stdin`. Upon reading this path and newline, the script must generate the
+/// next reduction at that path. Once generation of the reduction is complete,
+/// the script must write a '\n' byte to `stdout`. Alternatively, if the
+/// subprocess has exhausted all of its potential reductions, then it may simply
+/// exit without printing anything.
 ///
-/// All generated reduction's file paths must be encoded in valid UTF-8.
-///
-/// Scripts must not write files that are outside their current directory.
+/// All file paths are encoded in UTF-8.
 ///
 /// ### Example Reducer Script
 ///
@@ -43,15 +43,16 @@ use traits::Reducer;
 ///
 /// # Generate a potential reduction of the seed's last line, then its last 2
 /// # lines, then its last 3 lines, etc...
+///
 /// for (( i=1 ; i < n; i++ )); do
-///     # Read the '\n' from stdin and ignore it.
-///     read -r ignored
+///     # Read the file path and '\n' from stdin.
+///     read -r reduction_path
 ///
 ///     # Generate the potential reduction in a new file.
-///     tail -n "$i" "$seed" > "tail-$i"
+///     tail -n "$i" "$seed" > "$reduction_path"
 ///
-///     # Tell `preduce` about the potential reduction.
-///     echo "tail-$i"
+///     # Tell `preduce` that we are done generating the potential reduction.
+///     echo
 /// done
 /// ```
 ///
@@ -75,10 +76,12 @@ use traits::Reducer;
 #[derive(Debug)]
 pub struct Script {
     program: ffi::OsString,
+    out_dir: Option<Arc<tempdir::TempDir>>,
+    counter: usize,
     seed: Option<test_case::Interesting>,
-    out_dir: Option<tempdir::TempDir>,
     child: Option<process::Child>,
-    child_stdout: Option<io::BufReader<process::ChildStdout>>,
+    child_stdout: Option<process::ChildStdout>,
+    strict: bool,
 }
 
 impl Script {
@@ -89,18 +92,25 @@ impl Script {
     {
         Script {
             program: program.into(),
-            seed: None,
             out_dir: None,
+            counter: 0,
+            seed: None,
             child: None,
             child_stdout: None,
+            strict: false,
         }
+    }
+
+    /// TODO FITZGEN
+    pub fn set_strict(&mut self, be_strict: bool) {
+        self.strict = be_strict;
     }
 
     fn spawn_child(&mut self) -> error::Result<()> {
         assert!(self.seed.is_some());
         assert!(self.out_dir.is_none() && self.child.is_none() && self.child_stdout.is_none());
 
-        self.out_dir = Some(tempdir::TempDir::new("preduce-reduction-script")?);
+        self.out_dir = Some(Arc::new(tempdir::TempDir::new("preduce-reducer-script")?));
 
         let mut cmd = process::Command::new(&self.program);
         cmd.current_dir(self.out_dir.as_ref().unwrap().path())
@@ -111,20 +121,24 @@ impl Script {
 
         let mut child = cmd.spawn()?;
         let stdout = child.stdout.take().unwrap();
-        self.child_stdout = Some(io::BufReader::new(stdout));
+        self.child_stdout = Some(stdout);
         self.child = Some(child);
 
         Ok(())
     }
 
     fn kill_child(&mut self) {
-        println!("FITZGEN: reducers::Script::kill_child");
-
         if let Some(mut child) = self.child.take() {
             let _ = child.kill();
         }
         self.child_stdout = None;
         self.out_dir = None;
+    }
+
+    fn next_temp_file(&mut self) -> error::Result<test_case::TempFile> {
+        let file_path = path::PathBuf::from(self.counter.to_string());
+        self.counter += 1;
+        test_case::TempFile::new(self.out_dir.as_ref().unwrap().clone(), file_path)
     }
 }
 
@@ -136,7 +150,6 @@ impl Drop for Script {
 
 impl Reducer for Script {
     fn set_seed(&mut self, seed: test_case::Interesting) {
-        println!("FITZGEN: reducers::Script::set_seed");
         self.seed = Some(seed);
 
         // If we have an extant child process, kill it now. We'll start a new
@@ -146,8 +159,6 @@ impl Reducer for Script {
     }
 
     fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
-        println!("FITZGEN: reducers::Script::next_potential_reduction");
-
         assert!(
             self.seed.is_some(),
             "Must be initialized with calls to set_seed before asking for potential \
@@ -158,7 +169,9 @@ impl Reducer for Script {
             self.spawn_child()?;
         }
 
-        assert!(self.child.is_some() && self.child_stdout.is_some() && self.out_dir.is_some());
+        assert!(self.out_dir.is_some() && self.child.is_some() && self.child_stdout.is_some());
+
+        let temp_file = self.next_temp_file()?;
 
         // Write a newline to the child's stdin. If this fails, then the child
         // already exited, presumably because it determined it could not
@@ -166,9 +179,8 @@ impl Reducer for Script {
         if {
                let mut child = self.child.as_mut().unwrap();
                let mut stdin = child.stdin.as_mut().unwrap();
-               write!(stdin, "\n").is_err()
-        } {
-            println!("FITZGEN: writing to stdin did not work");
+               write!(stdin, "{}\n", temp_file.path().display()).is_err()
+           } {
             self.kill_child();
             return Ok(None);
         }
@@ -176,52 +188,25 @@ impl Reducer for Script {
         // Read the path of the next potential reduction from the child's
         // stdout.
         let mut child_stdout = self.child_stdout.as_mut().unwrap();
-        let mut path = String::new();
-        if child_stdout.read_line(&mut path).is_err() {
-            println!("FITZGEN: reading a line did not work");
+        let mut newline = [0];
+        if child_stdout.read_exact(&mut newline).is_err() {
             return Ok(None);
         }
 
-        if path.is_empty() {
-            println!("FITZGEN: path is empty");
-            return Ok(None);
-        }
-
-        if path.pop() != Some('\n') {
+        if newline[0] != b'\n' {
             let details = format!(
                 "'{}' is not conforming to the reducer script protocol: \
-                                   expected a trailing newline",
+                                   expected a newline response",
                 self.program.to_string_lossy()
             );
             return Err(error::Error::MisbehavingReducerScript(details));
         }
 
-        let path: path::PathBuf = path.into();
-        let path = if path.is_relative() {
-            self.out_dir
-                .as_ref()
-                .unwrap()
-                .path()
-                .join(path)
-                .canonicalize()?
-        } else {
-            path.canonicalize()?
-        };
-
-        if !path.starts_with(self.out_dir.as_ref().unwrap()) {
+        if !temp_file.path().is_file() {
             let details = format!(
-                "'{}' is generating test cases outside of its out directory: {}",
+                "'{}' did not generate a test case file at {}",
                 self.program.to_string_lossy(),
-                path.to_string_lossy()
-            );
-            return Err(error::Error::MisbehavingReducerScript(details));
-        }
-
-        if !path.is_file() {
-            let details = format!(
-                "'{}' is generating test cases that don't exist: {}",
-                self.program.to_string_lossy(),
-                path.to_string_lossy()
+                temp_file.path().display()
             );
             return Err(error::Error::MisbehavingReducerScript(details));
         }
@@ -229,21 +214,21 @@ impl Reducer for Script {
         let reduction = test_case::PotentialReduction::new(
             self.seed.clone().unwrap(),
             self.program.to_string_lossy(),
-            path,
+            temp_file
         )?;
 
-        // TODO FITZGEN
-        //
-        // let seed_size = self.seed.as_ref().unwrap().size();
-        // if reduction.size() >= seed_size {
-        //     let details = format!(
-        //         "'{}' is generating reductions that are greater than or equal the seed's size: {} bytes >= {} bytes",
-        //         self.program.to_string_lossy(),
-        //         reduction.size(),
-        //         seed_size
-        //     );
-        //     return Err(error::Error::MisbehavingReducerScript(details));
-        // }
+        if self.strict {
+            let seed_size = self.seed.as_ref().unwrap().size();
+            if reduction.size() >= seed_size {
+                let details = format!(
+                    "'{}' is generating reductions that are greater than or equal the seed's size: {} >= {}",
+                    self.program.to_string_lossy(),
+                    reduction.size(),
+                    seed_size
+                );
+                return Err(error::Error::MisbehavingReducerScript(details));
+            }
+        }
 
         Ok(Some(reduction))
     }
@@ -283,10 +268,10 @@ impl Reducer for Script {
 /// }
 /// # } }
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Shuffle<R> {
     reducer: R,
-    buffer: Vec<test_case::PotentialReduction>,
+    buffer: Vec<test_case::PotentialReduction>
 }
 
 impl<R> Shuffle<R> {
@@ -296,7 +281,7 @@ impl<R> Shuffle<R> {
         assert!(capacity > 0);
         Shuffle {
             reducer: reducer,
-            buffer: Vec::with_capacity(capacity),
+            buffer: Vec::with_capacity(capacity)
         }
     }
 }
@@ -338,7 +323,7 @@ enum ChainState {
     Second,
 
     /// We exhausted both reducers.
-    Done,
+    Done
 }
 
 /// Generate reductions from `T`, followed by reductions from `U`.
@@ -372,7 +357,7 @@ enum ChainState {
 pub struct Chain<T, U> {
     first: T,
     second: U,
-    state: ChainState,
+    state: ChainState
 }
 
 impl<T, U> Chain<T, U> {
@@ -381,7 +366,7 @@ impl<T, U> Chain<T, U> {
         Chain {
             first: first,
             second: second,
-            state: ChainState::First,
+            state: ChainState::First
         }
     }
 }
@@ -460,7 +445,7 @@ where
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Fuse<R> {
     reducer: R,
-    finished: bool,
+    finished: bool
 }
 
 impl<R> Fuse<R> {
@@ -469,7 +454,7 @@ impl<R> Fuse<R> {
     pub fn new(reducer: R) -> Fuse<R> {
         Fuse {
             reducer: reducer,
-            finished: false,
+            finished: false
         }
     }
 }
@@ -501,10 +486,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    extern crate tempfile;
-
     use super::*;
     use std::env;
+    use std::fs;
     use test_case;
     use test_utils::*;
     use traits::Reducer;
@@ -512,11 +496,9 @@ mod tests {
     #[test]
     fn script() {
         env::set_var("PREDUCE_COUNTING_ITERATIONS", "6");
-        let mut reducer = Script::new(get_script("counting.sh"));
+        let mut reducer = Script::new(get_reducer("counting.sh"));
 
-        let seed = tempfile::NamedTempFile::new().unwrap();
-        let seed = test_case::Interesting::testing_only_new(seed.path());
-        reducer.set_seed(seed);
+        reducer.set_seed(test_case::Interesting::testing_only_new());
 
         for _ in 0..6 {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
@@ -529,39 +511,37 @@ mod tests {
     #[test]
     fn shuffle() {
         env::set_var("PREDUCE_COUNTING_ITERATIONS", "6");
-        let reducer = Script::new(get_script("counting.sh"));
+        let reducer = Script::new(get_reducer("counting.sh"));
         let mut reducer = Shuffle::new(3, reducer);
 
-        let seed = tempfile::NamedTempFile::new().unwrap();
-        let seed = test_case::Interesting::testing_only_new(seed.path());
-        reducer.set_seed(seed);
+        reducer.set_seed(test_case::Interesting::testing_only_new());
 
         let mut found = [false; 6];
 
         for _ in 0..3 {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
-            let file_name = reduction
-                .path()
-                .file_name()
-                .map(|s| s.to_string_lossy().into_owned());
-            match file_name.as_ref().map(|s| &s[..]) {
-                Some("counting-0") => found[0] = true,
-                Some("counting-1") => found[1] = true,
-                Some("counting-2") => found[2] = true,
+            let mut contents = String::new();
+            let mut file = fs::File::open(reduction.path()).expect("should open reduction file");
+            file.read_to_string(&mut contents).expect("should read file contents");
+
+            match contents.trim() {
+                "0" => found[0] = true,
+                "1" => found[1] = true,
+                "2" => found[2] = true,
                 otherwise => panic!("Unexpected reduction: {:?}", otherwise),
             }
         }
 
         for _ in 0..3 {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
-            let file_name = reduction
-                .path()
-                .file_name()
-                .map(|s| s.to_string_lossy().into_owned());
-            match file_name.as_ref().map(|s| &s[..]) {
-                Some("counting-3") => found[3] = true,
-                Some("counting-4") => found[4] = true,
-                Some("counting-5") => found[5] = true,
+            let mut contents = String::new();
+            let mut file = fs::File::open(reduction.path()).expect("should open reduction file");
+            file.read_to_string(&mut contents).expect("should read file contents");
+
+            match contents.trim() {
+                "3" => found[3] = true,
+                "4" => found[4] = true,
+                "5" => found[5] = true,
                 otherwise => panic!("Unexpected reduction: {:?}", otherwise),
             }
         }
@@ -572,37 +552,33 @@ mod tests {
     #[test]
     fn chain() {
         env::set_var("PREDUCE_COUNTING_ITERATIONS", "6");
-        let first = Script::new(get_script("counting.sh"));
-        let second = Script::new(get_script("alphabet.sh"));
+        let first = Script::new(get_reducer("counting.sh"));
+        let second = Script::new(get_reducer("alphabet.sh"));
         let mut reducer = Chain::new(first, second);
 
-        let seed = tempfile::NamedTempFile::new().unwrap();
-        let seed = test_case::Interesting::testing_only_new(seed.path());
-        reducer.set_seed(seed);
+        reducer.set_seed(test_case::Interesting::testing_only_new());
 
-        let mut next_file_name = || {
+        let mut next_file_contents = || {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
-            reduction
-                .path()
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                .into_owned()
+            let mut contents = String::new();
+            let mut file = fs::File::open(reduction.path()).expect("should open reduction file");
+            file.read_to_string(&mut contents).expect("should read file to string");
+            contents.trim().to_string()
         };
 
-        assert_eq!(next_file_name(), "counting-0");
-        assert_eq!(next_file_name(), "counting-1");
-        assert_eq!(next_file_name(), "counting-2");
-        assert_eq!(next_file_name(), "counting-3");
-        assert_eq!(next_file_name(), "counting-4");
-        assert_eq!(next_file_name(), "counting-5");
+        assert_eq!(next_file_contents(), "0");
+        assert_eq!(next_file_contents(), "1");
+        assert_eq!(next_file_contents(), "2");
+        assert_eq!(next_file_contents(), "3");
+        assert_eq!(next_file_contents(), "4");
+        assert_eq!(next_file_contents(), "5");
 
-        assert_eq!(next_file_name(), "alphabet-a");
-        assert_eq!(next_file_name(), "alphabet-b");
-        assert_eq!(next_file_name(), "alphabet-c");
-        assert_eq!(next_file_name(), "alphabet-d");
-        assert_eq!(next_file_name(), "alphabet-e");
-        assert_eq!(next_file_name(), "alphabet-f");
+        assert_eq!(next_file_contents(), "a");
+        assert_eq!(next_file_contents(), "b");
+        assert_eq!(next_file_contents(), "c");
+        assert_eq!(next_file_contents(), "d");
+        assert_eq!(next_file_contents(), "e");
+        assert_eq!(next_file_contents(), "f");
     }
 
     #[test]
@@ -615,7 +591,7 @@ mod tests {
             fn next_potential_reduction(&mut self,)
                 -> error::Result<Option<test_case::PotentialReduction>> {
                 let result = match self.0 % 3 {
-                    0 => Ok(Some(test_case::PotentialReduction::testing_only_new("hello")),),
+                    0 => Ok(Some(test_case::PotentialReduction::testing_only_new())),
                     1 => Ok(None),
                     2 => Err(error::Error::MisbehavingReducerScript("TEST".into())),
                     _ => unreachable!(),

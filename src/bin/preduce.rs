@@ -22,17 +22,17 @@ fn parse_args() -> clap::ArgMatches<'static> {
         .arg(
             clap::Arg::with_name("predicate")
                 .required(true)
-                .help("The is-interesting predicate script."),
+                .help("The is-interesting predicate script.")
         )
         .arg(
             clap::Arg::with_name("reducer")
                 .required(true)
-                .help("The reduction generator script."),
+                .help("The reduction generator script.")
         )
         .arg(
             clap::Arg::with_name("test-case")
                 .required(true)
-                .help("The initial test case to reduce."),
+                .help("The initial test case to reduce.")
         )
         .arg(
             clap::Arg::with_name("workers")
@@ -48,12 +48,12 @@ fn parse_args() -> clap::ArgMatches<'static> {
                         } else {
                             Err("NUM_WORKERS must be a number greater than 0".into())
                         }
-                    },
+                    }
                 )
                 .help(
                     "Set the number of parallel workers. Defaults to the number of logical \
-                        CPUs.",
-                ),
+                        CPUs."
+                )
         )
         .get_matches()
 }

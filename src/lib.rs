@@ -57,7 +57,7 @@ where
     test_case: path::PathBuf,
     is_interesting: I,
     reducer: R,
-    workers: usize,
+    workers: usize
 }
 
 /// APIs for configuring options and spawning the reduction process.
@@ -86,7 +86,7 @@ where
             test_case: test_case.into(),
             is_interesting: is_interesting,
             reducer: reducers::Fuse::new(reducer),
-            workers: num_cpus::get(),
+            workers: num_cpus::get()
         }
     }
 

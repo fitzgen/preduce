@@ -12,7 +12,6 @@ use std::io;
 use std::path;
 use std::sync::mpsc;
 use std::thread;
-use tempdir;
 use test_case::{self, TestCaseMethods};
 use traits;
 
@@ -22,7 +21,7 @@ enum SupervisorMessage {
     RequestNextReduction(Worker),
     WorkerPanicked(WorkerId, Box<Any + Send + 'static>),
     WorkerErrored(WorkerId, error::Error),
-    ReportInteresting(Worker, test_case::Interesting),
+    ReportInteresting(Worker, path::PathBuf, test_case::Interesting),
 }
 
 /// A client handle to the supervisor actor.
@@ -35,25 +34,27 @@ pub struct Supervisor {
 impl Supervisor {
     /// Spawn the supervisor thread, which will in turn spawn workers and start
     /// the test case reduction process.
-    pub fn spawn<I, R>(opts: Options<I, R>,)
-        -> error::Result<(Supervisor, thread::JoinHandle<error::Result<()>>)>
-    where
-        I: 'static + traits::IsInteresting,
-        R: 'static + traits::Reducer,
+    pub fn spawn<I, R>
+        (opts: Options<I, R>)
+         -> error::Result<(Supervisor, thread::JoinHandle<error::Result<()>>)>
+        where I: 'static + traits::IsInteresting,
+              R: 'static + traits::Reducer
     {
         let (sender, receiver) = mpsc::channel();
         let sender2 = sender.clone();
 
         let handle = thread::Builder::new()
             .name(format!("preduce-supervisor"))
-            .spawn(
-                move || {
-                    let supervisor = Supervisor { sender: sender2 };
-                    SupervisorActor::run(opts, supervisor, receiver)
-                },
-            )?;
+            .spawn(move || {
+                       let supervisor = Supervisor {
+                           sender: sender2,
+                       };
+                       SupervisorActor::run(opts, supervisor, receiver)
+                   })?;
 
-        let sup = Supervisor { sender: sender };
+        let sup = Supervisor {
+            sender: sender,
+        };
 
         Ok((sup, handle))
     }
@@ -67,7 +68,9 @@ impl Supervisor {
     }
 
     /// Notify the supervisor that the worker with the given id panicked.
-    pub fn worker_panicked(&self, id: WorkerId, panic: Box<Any + Send + 'static>) {
+    pub fn worker_panicked(&self,
+                           id: WorkerId,
+                           panic: Box<Any + Send + 'static>) {
         self.sender
             .send(SupervisorMessage::WorkerPanicked(id, panic))
             .unwrap();
@@ -82,41 +85,40 @@ impl Supervisor {
 
     /// Notify the supervisor that the given test case has been found to be
     /// interesting.
-    pub fn report_interesting(&self, who: Worker, interesting: test_case::Interesting) {
+    pub fn report_interesting(&self,
+                              who: Worker,
+                              downstream: path::PathBuf,
+                              interesting: test_case::Interesting) {
         self.sender
-            .send(SupervisorMessage::ReportInteresting(who, interesting))
+            .send(SupervisorMessage::ReportInteresting(who, downstream, interesting))
             .unwrap();
     }
 }
 
 // Supervisor actor implementation.
 
-struct SupervisorActor<'a, I, R>
-where
-    I: 'static + traits::IsInteresting,
-    R: 'static + traits::Reducer,
+struct SupervisorActor<I, R>
+    where I: 'static + traits::IsInteresting,
+          R: 'static + traits::Reducer
 {
     opts: Options<I, R>,
     me: Supervisor,
     logger: Logger,
     logger_handle: thread::JoinHandle<()>,
-    repo: git::TempRepo<'a>,
+    repo: git::TempRepo,
     worker_id_counter: usize,
     workers: HashMap<WorkerId, Worker>,
 }
 
-impl<'a, I, R> SupervisorActor<'a, I, R>
-where
-    I: 'static + traits::IsInteresting,
-    R: 'static + traits::Reducer,
+impl<I, R> SupervisorActor<I, R>
+    where I: 'static + traits::IsInteresting,
+          R: 'static + traits::Reducer
 {
-    fn run(
-        opts: Options<I, R>,
-        me: Supervisor,
-        incoming: mpsc::Receiver<SupervisorMessage>,
-    ) -> error::Result<()> {
-        let repodir = tempdir::TempDir::new("preduce-supervisor")?;
-        let repo = git::TempRepo::new(&repodir)?;
+    fn run(opts: Options<I, R>,
+           me: Supervisor,
+           incoming: mpsc::Receiver<SupervisorMessage>)
+           -> error::Result<()> {
+        let repo = git::TempRepo::new("preduce-supervisor")?;
 
         let num_workers = opts.num_workers();
         let (logger, logger_handle) = Logger::spawn(io::stdout())?;
@@ -139,14 +141,12 @@ where
 
     /// Run the supervisor's main loop, serving reductions to workers, and
     /// keeping track of the globally smallest interesting test case.
-    fn run_loop(
-        mut self,
-        incoming: mpsc::Receiver<SupervisorMessage>,
-        initial_interesting: test_case::Interesting,
-    ) -> error::Result<()> {
+    fn run_loop(mut self,
+                incoming: mpsc::Receiver<SupervisorMessage>,
+                initial_interesting: test_case::Interesting)
+                -> error::Result<()> {
         let mut smallest_interesting = initial_interesting;
         let orig_size = smallest_interesting.size();
-        println!("FITZGEN: orig_size = {}", orig_size);
 
         for msg in incoming {
             match msg {
@@ -161,30 +161,27 @@ where
                 }
 
                 SupervisorMessage::RequestNextReduction(who) => {
-                    println!(
-                        "FITZGEN: smallest interesting reduction is {}",
-                        smallest_interesting.size()
-                    );
                     self.send_next_reduction_to(who)?;
                 }
 
-                SupervisorMessage::ReportInteresting(who, interesting) => {
+                SupervisorMessage::ReportInteresting(who,
+                                                     downstream,
+                                                     interesting) => {
                     self.handle_new_interesting_test_case(
                             who,
+                            downstream,
                             orig_size,
                             &mut smallest_interesting,
-                            interesting,
+                            interesting
                         )?;
                 }
             }
 
             if self.workers.is_empty() {
-                assert!(
-                    self.opts
-                        .reducer()
-                        .next_potential_reduction()?
-                        .is_none()
-                );
+                assert!(self.opts
+                            .reducer()
+                            .next_potential_reduction()?
+                            .is_none());
                 break;
             }
         }
@@ -193,11 +190,10 @@ where
     }
 
     /// TODO FITZGEN
-    fn shutdown(
-        self,
-        smallest_interesting: test_case::Interesting,
-        orig_size: u64,
-    ) -> error::Result<()> {
+    fn shutdown(self,
+                smallest_interesting: test_case::Interesting,
+                orig_size: u64)
+                -> error::Result<()> {
         self.logger
             .final_reduced_size(smallest_interesting.size(), orig_size);
         drop(self.logger);
@@ -228,30 +224,9 @@ where
         assert!(self.workers.contains_key(&who.id()));
         self.logger.start_generating_next_reduction();
 
-        if let Some(reduction) = self.opts.reducer().next_potential_reduction()? {
-            println!(
-                "FITZGEN: next potential reduction size is {}",
-                reduction.size()
-            );
-            println!(
-                "FITZGEN: next potential reduction path is {}",
-                reduction.path().display()
-            );
-            ::std::process::Command::new("diff")
-                .args(
-                    &[
-                        self.repo
-                            .test_case_path()
-                            .unwrap()
-                            .display()
-                            .to_string(),
-                        reduction.path().display().to_string(),
-                        "-U3".into(),
-                    ],
-                )
-                .status()
-                .unwrap();
-
+        if let Some(reduction) = self.opts
+               .reducer()
+               .next_potential_reduction()? {
             self.logger.finish_generating_next_reduction();
             who.next_reduction(reduction);
         } else {
@@ -273,10 +248,11 @@ where
     fn handle_new_interesting_test_case(
         &mut self,
         who: Worker,
+        downstream: path::PathBuf,
         orig_size: u64,
         smallest_interesting: &mut test_case::Interesting,
         interesting: test_case::Interesting,
-    ) -> error::Result<()> {
+) -> error::Result<()>{
         let new_size = interesting.size();
         let old_size = smallest_interesting.size();
 
@@ -286,14 +262,15 @@ where
             // reduction. The reduction process can take a LONG time, and if the
             // computation is interrupted for whatever reason, we DO NOT want to
             // lose this incremental progress!
+            *smallest_interesting = interesting;
             fs::copy(smallest_interesting.path(), &self.opts.test_case)?;
             self.logger.new_smallest(new_size, orig_size);
 
             // Second, reset our repo's HEAD to the new interesting test case's
-            // commit. When we re-seed the reducer, we want it to be reducing
-            // the supervisor's copy of the test case, not the worker's copy,
-            // which will change as it gets new reductions to test.
-            *smallest_interesting = interesting.clone_by_resetting_into_repo(&self.repo)?;
+            // commit.
+            self.repo
+                .fetch_and_reset_hard(downstream,
+                                      smallest_interesting.commit_id())?;
 
             // Third, re-seed our reducer with the new test case, send new work
             // to the reporting worker, and respawn any workers that might have
@@ -302,10 +279,6 @@ where
             self.opts
                 .reducer()
                 .set_seed(smallest_interesting.clone());
-            println!(
-                "FITZGEN: smallest interesting reduction is {}",
-                smallest_interesting.size()
-            );
             self.send_next_reduction_to(who)?;
             self.spawn_workers()?;
         } else {
@@ -316,10 +289,6 @@ where
             // abandon this thread of traversal.
             self.logger.is_not_smaller();
             if interesting.provenance() == Some("merge") {
-                println!(
-                    "FITZGEN: smallest interesting reduction is {}",
-                    smallest_interesting.size()
-                );
                 self.send_next_reduction_to(who)?;
             } else {
                 who.try_merge(old_size, self.repo.head_id()?);
@@ -343,10 +312,10 @@ where
                 || {
                     let e = io::Error::new(
                         io::ErrorKind::Other,
-                        "test case path must exist and representable in utf-8",
+                        "test case path must exist and representable in utf-8"
                     );
                     error::Error::TestCaseBackupFailure(e)
-                },
+                }
             )?;
         file_name.push_str(".orig");
         backup_path.set_file_name(file_name);
@@ -361,12 +330,12 @@ where
     }
 
     /// Verify that the initial, unreduced test case is itself interesting.
-    fn verify_initially_interesting(&mut self) -> error::Result<test_case::Interesting> {
-        let initial = test_case::Interesting::initial(
-            &self.opts.test_case,
-            self.opts.predicate(),
-            &self.repo,
-        )?;
+    fn verify_initially_interesting
+        (&mut self)
+         -> error::Result<test_case::Interesting> {
+        let initial = test_case::Interesting::initial(&self.opts.test_case,
+                                                      self.opts.predicate(),
+                                                      &self.repo)?;
         let initial = initial
             .ok_or(error::Error::InitialTestCaseNotInteresting)?;
         self.opts.reducer().set_seed(initial.clone());
@@ -376,28 +345,22 @@ where
     /// Spawn (or re-spawn) workers until we have the number of active,
     /// concurrent workers originally requested in the `Options`.
     fn spawn_workers(&mut self) -> error::Result<()> {
-        println!(
-            "FITZGEN: SupervisorActor::spawn_workers: need {} more workers",
-            self.opts.num_workers() - self.workers.len()
-        );
+        assert!(self.workers.len() <= self.opts.num_workers());
 
-        let new_workers: error::Result<Vec<_>> = (self.workers.len()..self.opts.num_workers())
-            .map(
-                |_| {
+        let new_workers: error::Result<Vec<_>> = (self.workers.len()..
+                                                  self.opts.num_workers())
+                .map(|_| {
                     let id = WorkerId::new(self.worker_id_counter);
                     self.worker_id_counter += 1;
 
-                    let worker = Worker::spawn(
-                        id,
-                        self.opts.predicate().clone(),
-                        self.me.clone(),
-                        self.logger.clone(),
-                        self.repo.path(),
-                    )?;
+                    let worker = Worker::spawn(id,
+                                               self.opts.predicate().clone(),
+                                               self.me.clone(),
+                                               self.logger.clone(),
+                                               self.repo.path())?;
                     Ok((id, worker))
-                },
-            )
-            .collect();
+                })
+                .collect();
         let new_workers = new_workers?;
         self.workers.extend(new_workers);
         Ok(())

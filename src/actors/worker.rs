@@ -11,7 +11,6 @@ use std::panic;
 use std::path;
 use std::sync::mpsc;
 use std::thread;
-use tempdir;
 use test_case::{self, TestCaseMethods};
 use traits;
 
@@ -36,14 +35,14 @@ impl fmt::Display for WorkerId {
 enum WorkerMessage {
     NextReduction(test_case::PotentialReduction),
     Shutdown,
-    TryMerge(u64, git2::Oid),
+    TryMerge(u64, git2::Oid)
 }
 
 /// A client handle to a worker actor.
 #[derive(Clone, Debug)]
 pub struct Worker {
     id: WorkerId,
-    sender: mpsc::Sender<WorkerMessage>,
+    sender: mpsc::Sender<WorkerMessage>
 }
 
 /// Worker client API.
@@ -63,7 +62,7 @@ impl Worker {
 
         let me = Worker {
             id: id,
-            sender: sender,
+            sender: sender
         };
         let me2 = me.clone();
 
@@ -72,7 +71,7 @@ impl Worker {
             .spawn(
                 move || {
                     WorkerActor::run(id, me2, predicate, receiver, supervisor, logger, upstream);
-                },
+                }
             )?;
 
         Ok(me)
@@ -83,67 +82,69 @@ impl Worker {
         self.id
     }
 
+    // For communication with this worker from the supervisor, don't unwrap the
+    // mpsc sends. Instead of panicking the supervisor, let the catch_unwind'ing
+    // of the worker inform the supervisor of a worker's early, unexpected
+    // demise.
+
     /// Tell this worker to shutdown.
     pub fn shutdown(self) {
-        self.sender.send(WorkerMessage::Shutdown).unwrap();
+        let _ = self.sender.send(WorkerMessage::Shutdown);
     }
 
     /// Send the worker the response to its request for another potential
     /// reduction.
     pub fn next_reduction(&self, reduction: test_case::PotentialReduction) {
-        self.sender
-            .send(WorkerMessage::NextReduction(reduction))
-            .unwrap();
+        let _ = self.sender.send(WorkerMessage::NextReduction(reduction));
     }
 
     /// Tell the worker to try and merge the upstream's test case at the given
     /// commit ID into its interesting (but not globally smallest) test case.
     pub fn try_merge(&self, upstream_size: u64, commit_id: git2::Oid) {
-        self.sender
-            .send(WorkerMessage::TryMerge(upstream_size, commit_id))
-            .unwrap();
+        let _ = self.sender
+            .send(WorkerMessage::TryMerge(upstream_size, commit_id));
     }
 }
 
 // Worker actor implementation.
 
-struct WorkerActor<'a> {
+struct WorkerActor {
     id: WorkerId,
     me: Worker,
     predicate: Box<traits::IsInteresting>,
     incoming: mpsc::Receiver<WorkerMessage>,
     supervisor: Supervisor,
     logger: Logger,
-    repo: git::TempRepo<'a>,
+    repo: git::TempRepo
 }
 
-impl<'a> fmt::Debug for WorkerActor<'a> {
+impl fmt::Debug for WorkerActor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "WorkerActor")
     }
 }
 
 #[derive(Debug)]
-struct Test<'a> {
-    worker: WorkerActor<'a>,
-    reduction: test_case::PotentialReduction,
+struct Test {
+    worker: WorkerActor,
+    reduction: test_case::PotentialReduction
 }
 
 #[derive(Debug)]
-struct Interesting<'a> {
-    worker: WorkerActor<'a>,
-    interesting: test_case::Interesting,
+struct Interesting {
+    worker: WorkerActor,
+    interesting: test_case::Interesting
 }
 
 #[derive(Debug)]
-struct TryMerge<'a> {
-    worker: WorkerActor<'a>,
+struct TryMerge {
+    worker: WorkerActor,
     interesting: test_case::Interesting,
     upstream_size: u64,
-    commit_id: git2::Oid,
+    commit_id: git2::Oid
 }
 
-impl<'a> WorkerActor<'a> {
+impl WorkerActor {
     fn run(
         id: WorkerId,
         me: Worker,
@@ -166,10 +167,10 @@ impl<'a> WorkerActor<'a> {
                             incoming,
                             supervisor2,
                             logger2,
-                            upstream,
+                            upstream
                         )
-                    },
-                ),
+                    }
+                )
             )
               } {
             Err(p) => {
@@ -194,8 +195,7 @@ impl<'a> WorkerActor<'a> {
         logger.spawned_worker(id);
 
         let prefix = format!("preduce-worker-{}", id);
-        let tempdir = tempdir::TempDir::new(&prefix)?;
-        let repo = git::TempRepo::clone(&upstream, &tempdir)?;
+        let repo = git::TempRepo::clone(&upstream, &prefix)?;
 
         let worker = WorkerActor {
             id: id,
@@ -204,7 +204,7 @@ impl<'a> WorkerActor<'a> {
             incoming: incoming,
             supervisor: supervisor,
             logger: logger,
-            repo: repo,
+            repo: repo
         };
 
         let mut test = match worker.get_next_reduction() {
@@ -262,7 +262,7 @@ impl<'a> WorkerActor<'a> {
         None
     }
 
-    fn get_next_reduction(self) -> Option<Test<'a>> {
+    fn get_next_reduction(self) -> Option<Test> {
         self.supervisor.request_next_reduction(self.me.clone());
         match self.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => self.shutdown(),
@@ -270,8 +270,8 @@ impl<'a> WorkerActor<'a> {
                 Some(
                     Test {
                         worker: self,
-                        reduction: reduction,
-                    },
+                        reduction: reduction
+                    }
                 )
             }
             otherwise => {
@@ -284,27 +284,14 @@ impl<'a> WorkerActor<'a> {
     }
 }
 
-impl<'a> Test<'a> {
-    fn judge(self) -> error::Result<Either<Interesting<'a>, WorkerActor<'a>>> {
+impl Test {
+    fn judge(self) -> error::Result<Either<Interesting, WorkerActor>> {
         self.worker
             .logger
             .start_judging_interesting(self.worker.id);
         let maybe_interesting = self.reduction
             .into_interesting(&self.worker.predicate, &self.worker.repo)?;
         if let Some(interesting) = maybe_interesting {
-            // TODO FITZGEN
-            println!("===================================================");
-            ::std::process::Command::new("git")
-                .args(&["diff", "HEAD^"])
-                .current_dir({
-                    let mut repo_path = ::std::path::PathBuf::from(self.worker.repo.path());
-                    repo_path.pop();
-                    repo_path
-                })
-                .status()
-                .unwrap();
-            println!("===================================================");
-
             self.worker
                 .logger
                 .judged_interesting(self.worker.id, interesting.size());
@@ -312,9 +299,9 @@ impl<'a> Test<'a> {
                 Left(
                     Interesting {
                         worker: self.worker,
-                        interesting: interesting,
-                    },
-                ),
+                        interesting: interesting
+                    }
+                )
             )
         } else {
             self.worker
@@ -325,11 +312,15 @@ impl<'a> Test<'a> {
     }
 }
 
-impl<'a> Interesting<'a> {
-    fn report_to_supervisor(self) -> Either<TryMerge<'a>, Option<Test<'a>>> {
+impl Interesting {
+    fn report_to_supervisor(self) -> Either<TryMerge, Option<Test>> {
         self.worker
             .supervisor
-            .report_interesting(self.worker.me.clone(), self.interesting.clone());
+            .report_interesting(
+                self.worker.me.clone(),
+                self.worker.repo.path().into(),
+                self.interesting.clone()
+            );
 
         match self.worker.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => Right(self.worker.shutdown()),
@@ -338,9 +329,9 @@ impl<'a> Interesting<'a> {
                     Some(
                         Test {
                             worker: self.worker,
-                            reduction: reduction,
-                        },
-                    ),
+                            reduction: reduction
+                        }
+                    )
                 )
             }
             WorkerMessage::TryMerge(upstream_size, commit_id) => {
@@ -353,16 +344,16 @@ impl<'a> Interesting<'a> {
                         worker: self.worker,
                         interesting: self.interesting,
                         upstream_size: upstream_size,
-                        commit_id: commit_id,
-                    },
+                        commit_id: commit_id
+                    }
                 )
             }
         }
     }
 }
 
-impl<'a> TryMerge<'a> {
-    fn into_test(self) -> error::Result<Option<Test<'a>>> {
+impl TryMerge {
+    fn into_test(self) -> error::Result<Option<Test>> {
         // Should split this out into `into_merged_test`, call that new function
         // here, and then inspect its errors for merge failures and recover from
         // them gracefully? Right now, if there is a merge conflict, we will
@@ -386,9 +377,9 @@ impl<'a> TryMerge<'a> {
                 .merge_commits(&our_commit, &their_commit, None)?;
 
             merged = test_case::PotentialReduction::new(
-                self.interesting,
+                self.interesting.clone(),
                 "merge",
-                self.worker.repo.test_case_path()?,
+                self.interesting
             )?;
 
             let msg = format!("merge - {} - {}", merged.size(), merged.path().display());
@@ -404,9 +395,9 @@ impl<'a> TryMerge<'a> {
                 Some(
                     Test {
                         worker: self.worker,
-                        reduction: merged,
-                    },
-                ),
+                        reduction: merged
+                    }
+                )
             )
         } else {
             {

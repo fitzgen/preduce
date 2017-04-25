@@ -14,26 +14,17 @@ with open(seed, "r") as f:
         n += 1
 
 for i in range(0, n):
-    # Read the '\n' from stdin and ignore it.
-    sys.stdin.readline()
+    # Read the file path from stdin.
+    out_file_path = sys.stdin.readline().strip()
 
-    # Generate the potential reduction without the seed's i^th line in a new
-    # file.
-
-    out_file_path = "lines-{}-{}".format(str(i), str(random.random()))
-
-    try:
-        os.remove(out_file_path)
-    except FileNotFoundError:
-        pass
-
+    # Generate the potential reduction without the seed's i^th line into the
+    # given path.
     with open(out_file_path, "w") as out_file:
         with open(seed, "r") as in_file:
             for j, line in enumerate(in_file):
                 if i != j:
                     out_file.write(line)
 
-    # Tell `preduce` about the potential reduction.
-    sys.stdout.write(out_file_path)
+    # Tell `preduce` we generated the reduction.
     sys.stdout.write("\n")
     sys.stdout.flush()

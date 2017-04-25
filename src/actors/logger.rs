@@ -29,7 +29,7 @@ enum LoggerMessage {
     NoMoreReductions,
     FinalReducedSize(u64, u64),
     TryMerge(WorkerId, git2::Oid, git2::Oid),
-    FinishedMerging(WorkerId, u64, u64),
+    FinishedMerging(WorkerId, u64, u64)
 }
 
 impl fmt::Display for LoggerMessage {
@@ -105,10 +105,22 @@ impl fmt::Display for LoggerMessage {
                 )
             }
             LoggerMessage::TryMerge(id, upstream_commit, worker_commit) => {
-                write!(f, "Worker {}: trying to merge upstream's {} into our {}", id, upstream_commit, worker_commit)
+                write!(
+                    f,
+                    "Worker {}: trying to merge upstream's {} into our {}",
+                    id,
+                    upstream_commit,
+                    worker_commit
+                )
             }
             LoggerMessage::FinishedMerging(id, merged_size, upstream_size) => {
-                write!(f, "Worker {}: finished merging; merged size is {}, upstream size is {}", id, merged_size, upstream_size)
+                write!(
+                    f,
+                    "Worker {}: finished merging; merged size is {}, upstream size is {}",
+                    id,
+                    merged_size,
+                    upstream_size
+                )
             }
         }
     }
@@ -117,7 +129,7 @@ impl fmt::Display for LoggerMessage {
 /// A client to the logger actor.
 #[derive(Clone, Debug)]
 pub struct Logger {
-    sender: mpsc::Sender<LoggerMessage>,
+    sender: mpsc::Sender<LoggerMessage>
 }
 
 /// Logger client implementation.
@@ -128,7 +140,9 @@ impl Logger {
         W: 'static + Send + Write,
     {
         let (sender, receiver) = mpsc::channel();
-        let handle = thread::Builder::new().name("preduce-logger".into()).spawn(move || Logger::run(to, receiver))?;
+        let handle = thread::Builder::new()
+            .name("preduce-logger".into())
+            .spawn(move || Logger::run(to, receiver))?;
         Ok((Logger { sender: sender }, handle))
     }
 
@@ -256,12 +270,16 @@ impl Logger {
 
     /// Log that the worker with the given id is attempting a merge.
     pub fn try_merging(&self, id: WorkerId, upstream_commit: git2::Oid, worker_commit: git2::Oid) {
-        self.sender.send(LoggerMessage::TryMerge(id, upstream_commit, worker_commit)).unwrap();
+        self.sender
+            .send(LoggerMessage::TryMerge(id, upstream_commit, worker_commit))
+            .unwrap();
     }
 
     /// Log that the worker with the given id is attempting a merge.
     pub fn finished_merging(&self, id: WorkerId, merged_size: u64, upstream_size: u64) {
-        self.sender.send(LoggerMessage::FinishedMerging(id, merged_size, upstream_size)).unwrap();
+        self.sender
+            .send(LoggerMessage::FinishedMerging(id, merged_size, upstream_size))
+            .unwrap();
     }
 }
 

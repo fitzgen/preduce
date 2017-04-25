@@ -32,7 +32,10 @@ impl IsInteresting for NonEmpty {
         Ok(len != 0)
     }
 
-    fn clone(&self) -> Box<IsInteresting> {
+    fn clone(&self) -> Box<IsInteresting>
+    where
+        Self: 'static,
+    {
         Box::new(NonEmpty) as _
     }
 }
@@ -85,7 +88,7 @@ impl IsInteresting for NonEmpty {
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Script {
-    program: ffi::OsString,
+    program: ffi::OsString
 }
 
 impl Script {
@@ -157,7 +160,7 @@ impl IsInteresting for Script {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct And<T, U> {
     first: T,
-    second: U,
+    second: U
 }
 
 impl<T, U> And<T, U> {
@@ -165,7 +168,7 @@ impl<T, U> And<T, U> {
     pub fn new(first: T, second: U) -> And<T, U> {
         And {
             first: first,
-            second: second,
+            second: second
         }
     }
 }
@@ -178,7 +181,7 @@ where
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
         Ok(
             self.first.is_interesting(potential_reduction)? &&
-            self.second.is_interesting(potential_reduction)?,
+            self.second.is_interesting(potential_reduction)?
         )
     }
 
@@ -220,7 +223,7 @@ where
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Or<T, U> {
     first: T,
-    second: U,
+    second: U
 }
 
 impl<T, U> Or<T, U> {
@@ -228,7 +231,7 @@ impl<T, U> Or<T, U> {
     pub fn new(first: T, second: U) -> Or<T, U> {
         Or {
             first: first,
-            second: second,
+            second: second
         }
     }
 }
@@ -241,7 +244,7 @@ where
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
         Ok(
             self.first.is_interesting(potential_reduction)? ||
-            self.second.is_interesting(potential_reduction)?,
+            self.second.is_interesting(potential_reduction)?
         )
     }
 
@@ -269,24 +272,28 @@ impl<T> IsInteresting for T
 
 #[cfg(test)]
 mod tests {
-    extern crate tempfile;
-
     use super::*;
+    use std::fs;
     use std::io::Write;
     use std::path;
+    use test_case;
     use test_utils::*;
 
     #[test]
     fn non_empty_file_is_interesting() {
-        let mut tmp = tempfile::NamedTempFile::new().unwrap();
-        write!(&mut *tmp, "z").unwrap();
+        let tmp = test_case::TempFile::anonymous().unwrap();
+        {
+            let mut tmp = fs::File::create(tmp.path()).unwrap();
+            write!(&mut tmp, "z").unwrap();
+        }
         let is_interesting = NonEmpty.is_interesting(tmp.path()).unwrap();
         assert!(is_interesting);
     }
 
     #[test]
     fn empty_file_is_not_interesting() {
-        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let tmp = test_case::TempFile::anonymous().unwrap();
+        fs::File::create(tmp.path()).unwrap();
         let is_interesting = NonEmpty.is_interesting(tmp.path()).unwrap();
         assert!(!is_interesting);
     }
@@ -294,49 +301,52 @@ mod tests {
     #[test]
     fn exit_zero_is_interesting() {
         let test = Script::new(get_exit_0());
-        let test_case = tempfile::NamedTempFile::new().unwrap();
+        let test_case = test_case::TempFile::anonymous().unwrap();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn exit_non_zero_is_not_interesting() {
         let test = Script::new(get_exit_1());
-        let test_case = tempfile::NamedTempFile::new().unwrap();
+        let test_case = test_case::TempFile::anonymous().unwrap();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn and_both_true() {
         let test = And::new(Script::new(get_exit_0()), Script::new(get_exit_0()));
-        let test_case = tempfile::NamedTempFile::new().unwrap();
-        assert!(test.is_interesting(test_case.path()).unwrap());
+        let test_case = test_case::TempFile::anonymous().expect("should create anonymous file");
+        assert!(
+            test.is_interesting(test_case.path())
+                .expect("is interesting should return Ok")
+        );
     }
 
     #[test]
     fn and_one_false() {
         let test = And::new(Script::new(get_exit_0()), Script::new(get_exit_1()));
-        let test_case = tempfile::NamedTempFile::new().unwrap();
+        let test_case = test_case::TempFile::anonymous().unwrap();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_first_true() {
         let test = Or::new(Script::new(get_exit_0()), Script::new(get_exit_1()));
-        let test_case = tempfile::NamedTempFile::new().unwrap();
+        let test_case = test_case::TempFile::anonymous().unwrap();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_second_true() {
         let test = Or::new(Script::new(get_exit_1()), Script::new(get_exit_0()));
-        let test_case = tempfile::NamedTempFile::new().unwrap();
+        let test_case = test_case::TempFile::anonymous().unwrap();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_both_false() {
         let test = Or::new(Script::new(get_exit_1()), Script::new(get_exit_1()));
-        let test_case = tempfile::NamedTempFile::new().unwrap();
+        let test_case = test_case::TempFile::anonymous().unwrap();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
 
@@ -344,7 +354,7 @@ mod tests {
     fn func_returns_true() {
         let test = |_: &path::Path| Ok(true);
         let test = &test;
-        let test_case = tempfile::NamedTempFile::new().unwrap();
+        let test_case = test_case::TempFile::anonymous().unwrap();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
@@ -352,7 +362,7 @@ mod tests {
     fn func_returns_false() {
         let test = |_: &path::Path| Ok(false);
         let test = &test;
-        let test_case = tempfile::NamedTempFile::new().unwrap();
+        let test_case = test_case::TempFile::anonymous().unwrap();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
 }

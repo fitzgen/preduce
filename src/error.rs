@@ -25,7 +25,7 @@ pub enum Error {
     TestCaseBackupFailure(io::Error),
 
     /// The initial test case did not pass the is-interesting predicate.
-    InitialTestCaseNotInteresting,
+    InitialTestCaseNotInteresting
 }
 
 impl fmt::Display for Error {
