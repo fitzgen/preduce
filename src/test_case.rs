@@ -24,26 +24,41 @@ pub trait TestCaseMethods: Into<TempFile> {
     }
 }
 
-/// TODO FITZGEN
 #[derive(Debug, Clone)]
 struct TempFileInner {
-    /// The test case file itself, as a relative path from the temp dir.
+    /// The test case file itself. Stored as an absolute path internally.
     file_path: path::PathBuf,
 
     /// The temporary directory that this test case file is within.
     ///
-    /// Invariant: the `file` is always contained within this `dir`!
+    /// Invariant: the `file_path` is always contained within this `dir`!
     dir: Arc<tempdir::TempDir>
 }
 
-/// TODO FITZGEN
+/// An immutable, temporary file within a temporary directory.
+///
+/// When generating reductions, we never use a git repository's copy of its
+/// smallest reduced test case because that can always change out from under our
+/// feet at any time, which would then trigger bugs in any reducer or predicate
+/// that was using it. Instead, we only use these immutable, persistent
+/// temporary files, that are automatically cleaned up once they're no longer in
+/// use.
+///
+/// These temporary files and directories are atomically reference counted.
+/// There are no cycles because of both the lack of internal `RefCell`s to
+/// enable a cycle's construction, and because the underlying directories and
+/// files have no outgoing edges which could become back-edges. We are strictly
+/// dealing with a DAG, and therefore don't have to worry about leaking cycles.
 #[derive(Debug, Clone)]
 pub struct TempFile {
     inner: Arc<TempFileInner>
 }
 
 impl TempFile {
-    /// TODO FITZGEN
+    /// Construct a new temporary file within the given temporary directory.
+    ///
+    /// The `file_path` must be a path relative to the temporary directory's
+    /// path, and this function will panic if that is not the case.
     pub fn new<P>(dir: Arc<tempdir::TempDir>, file_path: P) -> error::Result<TempFile>
     where
         P: Into<path::PathBuf>,
@@ -63,13 +78,13 @@ impl TempFile {
         })
     }
 
-    /// TODO FITZGEN
+    /// Create a new anonymous temporary file in a new temporary directory.
     pub fn anonymous() -> error::Result<TempFile> {
         let dir = Arc::new(tempdir::TempDir::new("preduce-anonymous")?);
         TempFile::new(dir, "preduce-anonymous-temp-file")
     }
 
-    /// TODO FITZGEN
+    /// Get the path to this temporary file.
     pub fn path(&self) -> &path::Path {
         assert!(self.inner.file_path.is_absolute());
         &self.inner.file_path
@@ -114,7 +129,7 @@ pub struct PotentialReduction {
     /// was generated.
     parent: git2::Oid,
 
-    /// TODO FITZGEN
+    /// The temporary file containing the reduced test case.
     test_case: TempFile,
 
     /// The size of the test case file, in bytes.

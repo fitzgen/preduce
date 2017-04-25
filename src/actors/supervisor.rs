@@ -189,7 +189,7 @@ impl<I, R> SupervisorActor<I, R>
         self.shutdown(smallest_interesting, orig_size)
     }
 
-    /// TODO FITZGEN
+    /// Consume this supervisor actor and perform shutdown.
     fn shutdown(self,
                 smallest_interesting: test_case::Interesting,
                 orig_size: u64)

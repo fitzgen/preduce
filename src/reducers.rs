@@ -101,7 +101,10 @@ impl Script {
         }
     }
 
-    /// TODO FITZGEN
+    /// Enable or disable extra strict checks on the reducer script.
+    ///
+    /// For example, enforce that generated reductions are smaller than the
+    /// seed.
     pub fn set_strict(&mut self, be_strict: bool) {
         self.strict = be_strict;
     }

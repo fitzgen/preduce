@@ -41,7 +41,7 @@ pub trait RepoExt {
     /// Fetch the origin remote.
     fn fetch_origin(&self) -> error::Result<()>;
 
-    /// TODO FITZGEN
+    /// Fetch the remote and reset this repository to the given commit id.
     fn fetch_and_reset_hard<P>(&self, remote: P, commit_id: git2::Oid) -> error::Result<()>
         where P: AsRef<path::Path>;
 }
