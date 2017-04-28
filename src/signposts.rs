@@ -28,11 +28,11 @@ macro_rules! define_signpost {
 }
 
 define_signpost!(SupervisorHandleInteresting, 100);
-define_signpost!(SupervisorNextReduction,     101);
-define_signpost!(SupervisorShutdown,          102);
-define_signpost!(SupervisorRunLoop,           103);
+define_signpost!(SupervisorNextReduction, 101);
+define_signpost!(SupervisorShutdown, 102);
+define_signpost!(SupervisorRunLoop, 103);
 
-define_signpost!(WorkerGetNextReduction,      200);
-define_signpost!(WorkerJudgeInteresting,      201);
-define_signpost!(WorkerReportInteresting,     202);
-define_signpost!(WorkerTryMerging,            203);
+define_signpost!(WorkerGetNextReduction, 200);
+define_signpost!(WorkerJudgeInteresting, 201);
+define_signpost!(WorkerReportInteresting, 202);
+define_signpost!(WorkerTryMerging, 203);

@@ -59,7 +59,7 @@ where
     is_interesting: I,
     reducer: R,
     workers: usize,
-    try_merging: bool,
+    try_merging: bool
 }
 
 /// APIs for configuring options and spawning the reduction process.
@@ -89,7 +89,7 @@ where
             is_interesting: is_interesting,
             reducer: reducers::Fuse::new(reducer),
             workers: num_cpus::get(),
-            try_merging: true,
+            try_merging: true
         }
     }
 

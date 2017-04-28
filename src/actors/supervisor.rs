@@ -22,40 +22,38 @@ enum SupervisorMessage {
     RequestNextReduction(Worker),
     WorkerPanicked(WorkerId, Box<Any + Send + 'static>),
     WorkerErrored(WorkerId, error::Error),
-    ReportInteresting(Worker, path::PathBuf, test_case::Interesting),
+    ReportInteresting(Worker, path::PathBuf, test_case::Interesting)
 }
 
 /// A client handle to the supervisor actor.
 #[derive(Clone, Debug)]
 pub struct Supervisor {
-    sender: mpsc::Sender<SupervisorMessage>,
+    sender: mpsc::Sender<SupervisorMessage>
 }
 
 /// Supervisor client API.
 impl Supervisor {
     /// Spawn the supervisor thread, which will in turn spawn workers and start
     /// the test case reduction process.
-    pub fn spawn<I, R>
-        (opts: Options<I, R>)
-         -> error::Result<(Supervisor, thread::JoinHandle<error::Result<()>>)>
-        where I: 'static + traits::IsInteresting,
-              R: 'static + traits::Reducer
+    pub fn spawn<I, R>(opts: Options<I, R>,)
+        -> error::Result<(Supervisor, thread::JoinHandle<error::Result<()>>)>
+    where
+        I: 'static + traits::IsInteresting,
+        R: 'static + traits::Reducer,
     {
         let (sender, receiver) = mpsc::channel();
         let sender2 = sender.clone();
 
         let handle = thread::Builder::new()
             .name(format!("preduce-supervisor"))
-            .spawn(move || {
-                       let supervisor = Supervisor {
-                           sender: sender2,
-                       };
-                       SupervisorActor::run(opts, supervisor, receiver)
-                   })?;
+            .spawn(
+                move || {
+                    let supervisor = Supervisor { sender: sender2 };
+                    SupervisorActor::run(opts, supervisor, receiver)
+                }
+            )?;
 
-        let sup = Supervisor {
-            sender: sender,
-        };
+        let sup = Supervisor { sender: sender };
 
         Ok((sup, handle))
     }
@@ -69,9 +67,7 @@ impl Supervisor {
     }
 
     /// Notify the supervisor that the worker with the given id panicked.
-    pub fn worker_panicked(&self,
-                           id: WorkerId,
-                           panic: Box<Any + Send + 'static>) {
+    pub fn worker_panicked(&self, id: WorkerId, panic: Box<Any + Send + 'static>) {
         self.sender
             .send(SupervisorMessage::WorkerPanicked(id, panic))
             .unwrap();
@@ -86,10 +82,12 @@ impl Supervisor {
 
     /// Notify the supervisor that the given test case has been found to be
     /// interesting.
-    pub fn report_interesting(&self,
-                              who: Worker,
-                              downstream: path::PathBuf,
-                              interesting: test_case::Interesting) {
+    pub fn report_interesting(
+        &self,
+        who: Worker,
+        downstream: path::PathBuf,
+        interesting: test_case::Interesting,
+    ) {
         self.sender
             .send(SupervisorMessage::ReportInteresting(who, downstream, interesting))
             .unwrap();
@@ -99,8 +97,9 @@ impl Supervisor {
 // Supervisor actor implementation.
 
 struct SupervisorActor<I, R>
-    where I: 'static + traits::IsInteresting,
-          R: 'static + traits::Reducer
+where
+    I: 'static + traits::IsInteresting,
+    R: 'static + traits::Reducer,
 {
     opts: Options<I, R>,
     me: Supervisor,
@@ -108,17 +107,19 @@ struct SupervisorActor<I, R>
     logger_handle: thread::JoinHandle<()>,
     repo: git::TempRepo,
     worker_id_counter: usize,
-    workers: HashMap<WorkerId, Worker>,
+    workers: HashMap<WorkerId, Worker>
 }
 
 impl<I, R> SupervisorActor<I, R>
-    where I: 'static + traits::IsInteresting,
-          R: 'static + traits::Reducer
+where
+    I: 'static + traits::IsInteresting,
+    R: 'static + traits::Reducer,
 {
-    fn run(opts: Options<I, R>,
-           me: Supervisor,
-           incoming: mpsc::Receiver<SupervisorMessage>)
-           -> error::Result<()> {
+    fn run(
+        opts: Options<I, R>,
+        me: Supervisor,
+        incoming: mpsc::Receiver<SupervisorMessage>,
+    ) -> error::Result<()> {
         let repo = git::TempRepo::new("preduce-supervisor")?;
 
         let num_workers = opts.num_workers();
@@ -130,7 +131,7 @@ impl<I, R> SupervisorActor<I, R>
             logger_handle: logger_handle,
             repo: repo,
             worker_id_counter: 0,
-            workers: HashMap::with_capacity(num_workers),
+            workers: HashMap::with_capacity(num_workers)
         };
 
         supervisor.backup_original_test_case()?;
@@ -142,10 +143,11 @@ impl<I, R> SupervisorActor<I, R>
 
     /// Run the supervisor's main loop, serving reductions to workers, and
     /// keeping track of the globally smallest interesting test case.
-    fn run_loop(mut self,
-                incoming: mpsc::Receiver<SupervisorMessage>,
-                initial_interesting: test_case::Interesting)
-                -> error::Result<()> {
+    fn run_loop(
+        mut self,
+        incoming: mpsc::Receiver<SupervisorMessage>,
+        initial_interesting: test_case::Interesting,
+    ) -> error::Result<()> {
         let _signpost = signposts::SupervisorRunLoop::new();
 
         let mut smallest_interesting = initial_interesting;
@@ -167,9 +169,7 @@ impl<I, R> SupervisorActor<I, R>
                     self.send_next_reduction_to(who)?;
                 }
 
-                SupervisorMessage::ReportInteresting(who,
-                                                     downstream,
-                                                     interesting) => {
+                SupervisorMessage::ReportInteresting(who, downstream, interesting) => {
                     self.handle_new_interesting_test_case(
                             who,
                             downstream,
@@ -181,10 +181,12 @@ impl<I, R> SupervisorActor<I, R>
             }
 
             if self.workers.is_empty() {
-                assert!(self.opts
-                            .reducer()
-                            .next_potential_reduction()?
-                            .is_none());
+                assert!(
+                    self.opts
+                        .reducer()
+                        .next_potential_reduction()?
+                        .is_none()
+                );
                 break;
             }
         }
@@ -193,10 +195,11 @@ impl<I, R> SupervisorActor<I, R>
     }
 
     /// Consume this supervisor actor and perform shutdown.
-    fn shutdown(self,
-                smallest_interesting: test_case::Interesting,
-                orig_size: u64)
-                -> error::Result<()> {
+    fn shutdown(
+        self,
+        smallest_interesting: test_case::Interesting,
+        orig_size: u64,
+    ) -> error::Result<()> {
         let _signpost = signposts::SupervisorShutdown::new();
 
         self.logger
@@ -231,9 +234,7 @@ impl<I, R> SupervisorActor<I, R>
         let _signpost = signposts::SupervisorNextReduction::new();
         self.logger.start_generating_next_reduction();
 
-        if let Some(reduction) = self.opts
-               .reducer()
-               .next_potential_reduction()? {
+        if let Some(reduction) = self.opts.reducer().next_potential_reduction()? {
             self.logger.finish_generating_next_reduction();
             who.next_reduction(reduction);
         } else {
@@ -259,7 +260,7 @@ impl<I, R> SupervisorActor<I, R>
         orig_size: u64,
         smallest_interesting: &mut test_case::Interesting,
         interesting: test_case::Interesting,
-) -> error::Result<()>{
+    ) -> error::Result<()> {
         let _signpost = signposts::SupervisorHandleInteresting::new();
 
         let new_size = interesting.size();
@@ -278,8 +279,7 @@ impl<I, R> SupervisorActor<I, R>
             // Second, reset our repo's HEAD to the new interesting test case's
             // commit.
             self.repo
-                .fetch_and_reset_hard(downstream,
-                                      smallest_interesting.commit_id())?;
+                .fetch_and_reset_hard(downstream, smallest_interesting.commit_id())?;
 
             // Third, re-seed our reducer with the new test case, send new work
             // to the reporting worker, and respawn any workers that might have
@@ -339,12 +339,12 @@ impl<I, R> SupervisorActor<I, R>
     }
 
     /// Verify that the initial, unreduced test case is itself interesting.
-    fn verify_initially_interesting
-        (&mut self)
-         -> error::Result<test_case::Interesting> {
-        let initial = test_case::Interesting::initial(&self.opts.test_case,
-                                                      self.opts.predicate(),
-                                                      &self.repo)?;
+    fn verify_initially_interesting(&mut self) -> error::Result<test_case::Interesting> {
+        let initial = test_case::Interesting::initial(
+            &self.opts.test_case,
+            self.opts.predicate(),
+            &self.repo
+        )?;
         let initial = initial
             .ok_or(error::Error::InitialTestCaseNotInteresting)?;
         self.opts.reducer().set_seed(initial.clone());
@@ -356,20 +356,23 @@ impl<I, R> SupervisorActor<I, R>
     fn spawn_workers(&mut self) -> error::Result<()> {
         assert!(self.workers.len() <= self.opts.num_workers());
 
-        let new_workers: error::Result<Vec<_>> = (self.workers.len()..
-                                                  self.opts.num_workers())
-                .map(|_| {
+        let new_workers: error::Result<Vec<_>> = (self.workers.len()..self.opts.num_workers())
+            .map(
+                |_| {
                     let id = WorkerId::new(self.worker_id_counter);
                     self.worker_id_counter += 1;
 
-                    let worker = Worker::spawn(id,
-                                               self.opts.predicate().clone(),
-                                               self.me.clone(),
-                                               self.logger.clone(),
-                                               self.repo.path())?;
+                    let worker = Worker::spawn(
+                        id,
+                        self.opts.predicate().clone(),
+                        self.me.clone(),
+                        self.logger.clone(),
+                        self.repo.path()
+                    )?;
                     Ok((id, worker))
-                })
-                .collect();
+                }
+            )
+            .collect();
         let new_workers = new_workers?;
         self.workers.extend(new_workers);
         Ok(())

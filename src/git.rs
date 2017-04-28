@@ -43,7 +43,8 @@ pub trait RepoExt {
 
     /// Fetch the remote and reset this repository to the given commit id.
     fn fetch_and_reset_hard<P>(&self, remote: P, commit_id: git2::Oid) -> error::Result<()>
-        where P: AsRef<path::Path>;
+    where
+        P: AsRef<path::Path>;
 }
 
 impl RepoExt for git2::Repository {
@@ -94,14 +95,14 @@ impl RepoExt for git2::Repository {
     }
 
     fn fetch_and_reset_hard<P>(&self, remote: P, commit_id: git2::Oid) -> error::Result<()>
-        where P: AsRef<path::Path>
+    where
+        P: AsRef<path::Path>,
     {
         let remote = remote.as_ref();
         let remote = remote.to_string_lossy();
         let mut remote = self.remote_anonymous(&remote)?;
         remote.fetch(&["master"], None, None)?;
-        let object = self
-            .find_object(commit_id, Some(git2::ObjectType::Commit))?;
+        let object = self.find_object(commit_id, Some(git2::ObjectType::Commit))?;
         self.reset(&object, git2::ResetType::Hard, None)?;
         Ok(())
     }
@@ -112,7 +113,7 @@ pub struct TempRepo {
     // Only an `Option` so we can force its destruction before the temp dir
     // disappears under its feet.
     repo: Option<git2::Repository>,
-    _dir: Arc<tempdir::TempDir>,
+    _dir: Arc<tempdir::TempDir>
 }
 
 impl fmt::Debug for TempRepo {
@@ -152,10 +153,12 @@ impl TempRepo {
             repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])?;
         }
 
-        Ok(TempRepo {
-            repo: Some(repo),
-            _dir: dir,
-        })
+        Ok(
+            TempRepo {
+                repo: Some(repo),
+                _dir: dir
+            }
+        )
     }
 
     /// Create a temporary clone repository of a local upstream git repository.
@@ -166,10 +169,12 @@ impl TempRepo {
         let upstream = upstream.as_ref().to_string_lossy();
         let dir = Arc::new(tempdir::TempDir::new(prefix)?);
         let repo = git2::Repository::clone(&upstream, dir.path())?;
-        Ok(TempRepo {
-            repo: Some(repo),
-            _dir: dir,
-        })
+        Ok(
+            TempRepo {
+                repo: Some(repo),
+                _dir: dir
+            }
+        )
     }
 }
 

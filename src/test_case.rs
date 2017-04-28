@@ -64,18 +64,22 @@ impl TempFile {
         P: Into<path::PathBuf>,
     {
         let file_path = file_path.into();
-        assert!(file_path.is_relative(),
-                "The given file_path should be relative to the temporary directory");
+        assert!(
+            file_path.is_relative(),
+            "The given file_path should be relative to the temporary directory"
+        );
 
         let file_path = dir.path().canonicalize()?.join(file_path);
-        Ok(TempFile {
-            inner: Arc::new(
-                TempFileInner {
-                    file_path: file_path,
-                    dir: dir
-                }
-            )
-        })
+        Ok(
+            TempFile {
+                inner: Arc::new(
+                    TempFileInner {
+                        file_path: file_path,
+                        dir: dir
+                    }
+                )
+            }
+        )
     }
 
     /// Create a new anonymous temporary file in a new temporary directory.
@@ -500,7 +504,8 @@ mod tests {
         let reduction = PotentialReduction::new(interesting, "test", reduction)
             .expect("should create potenetial reduction");
 
-        let interesting_reduction = reduction.clone()
+        let interesting_reduction = reduction
+            .clone()
             .into_interesting(&judge, &repo)
             .expect("interesting reduction should be ok")
             .expect("interesting reduction should be some");
@@ -512,8 +517,10 @@ mod tests {
         );
 
         let repo_test_case_path = repo.test_case_path().unwrap();
-        assert!(repo_test_case_path.is_file(),
-                "The repo should now have a copy at its canonical test case path");
+        assert!(
+            repo_test_case_path.is_file(),
+            "The repo should now have a copy at its canonical test case path"
+        );
 
         let mut file = fs::File::open(&repo_test_case_path)
             .expect("The repo test case path should have a file");

@@ -81,7 +81,7 @@ pub struct Script {
     seed: Option<test_case::Interesting>,
     child: Option<process::Child>,
     child_stdout: Option<process::ChildStdout>,
-    strict: bool,
+    strict: bool
 }
 
 impl Script {
@@ -97,7 +97,7 @@ impl Script {
             seed: None,
             child: None,
             child_stdout: None,
-            strict: false,
+            strict: false
         }
     }
 
@@ -143,23 +143,26 @@ impl Script {
         test_case::TempFile::new(self.out_dir.as_ref().unwrap().clone(), file_path)
     }
 
-    fn next_potential_reduction_impl(&mut self)
-                                     -> error::Result<Option<test_case::PotentialReduction>> {
+    fn next_potential_reduction_impl(&mut self,)
+        -> error::Result<Option<test_case::PotentialReduction>> {
         assert!(self.out_dir.is_some() && self.child.is_some() && self.child_stdout.is_some());
 
-        let temp_file = self.next_temp_file().or_else(|e| {
-            self.kill_child();
-            Err(e)
-        })?;
+        let temp_file = self.next_temp_file()
+            .or_else(
+                |e| {
+                    self.kill_child();
+                    Err(e)
+                }
+            )?;
 
         // Write the desired path of the next reduction to the child's stdin. If
         // this fails, then the child already exited, presumably because it
         // determined it could not generate any reductions from the test file.
         if {
-            let mut child = self.child.as_mut().unwrap();
-            let mut child_stdin = child.stdin.as_mut().unwrap();
-            write!(child_stdin, "{}\n", temp_file.path().display()).is_err()
-        } {
+               let mut child = self.child.as_mut().unwrap();
+               let mut child_stdin = child.stdin.as_mut().unwrap();
+               write!(child_stdin, "{}\n", temp_file.path().display()).is_err()
+           } {
             self.kill_child();
             return Ok(None);
         }
@@ -168,9 +171,9 @@ impl Script {
         // the child has finished generating the reduction.
         let mut newline = [0];
         if {
-            let mut child_stdout = self.child_stdout.as_mut().unwrap();
-            child_stdout.read_exact(&mut newline).is_err()
-        } {
+               let mut child_stdout = self.child_stdout.as_mut().unwrap();
+               child_stdout.read_exact(&mut newline).is_err()
+           } {
             self.kill_child();
             return Ok(None);
         }
@@ -544,7 +547,8 @@ mod tests {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
             let mut contents = String::new();
             let mut file = fs::File::open(reduction.path()).expect("should open reduction file");
-            file.read_to_string(&mut contents).expect("should read file contents");
+            file.read_to_string(&mut contents)
+                .expect("should read file contents");
 
             match contents.trim() {
                 "0" => found[0] = true,
@@ -558,7 +562,8 @@ mod tests {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
             let mut contents = String::new();
             let mut file = fs::File::open(reduction.path()).expect("should open reduction file");
-            file.read_to_string(&mut contents).expect("should read file contents");
+            file.read_to_string(&mut contents)
+                .expect("should read file contents");
 
             match contents.trim() {
                 "3" => found[3] = true,
@@ -584,7 +589,8 @@ mod tests {
             let reduction = reducer.next_potential_reduction().unwrap().unwrap();
             let mut contents = String::new();
             let mut file = fs::File::open(reduction.path()).expect("should open reduction file");
-            file.read_to_string(&mut contents).expect("should read file to string");
+            file.read_to_string(&mut contents)
+                .expect("should read file to string");
             contents.trim().to_string()
         };
 
