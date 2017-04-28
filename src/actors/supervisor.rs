@@ -5,6 +5,7 @@ use super::{Logger, Worker, WorkerId};
 use super::super::Options;
 use error;
 use git::{self, RepoExt};
+use signposts;
 use std::any::Any;
 use std::collections::HashMap;
 use std::fs;
@@ -145,6 +146,8 @@ impl<I, R> SupervisorActor<I, R>
                 incoming: mpsc::Receiver<SupervisorMessage>,
                 initial_interesting: test_case::Interesting)
                 -> error::Result<()> {
+        let _signpost = signposts::SupervisorRunLoop::new();
+
         let mut smallest_interesting = initial_interesting;
         let orig_size = smallest_interesting.size();
 
@@ -194,6 +197,8 @@ impl<I, R> SupervisorActor<I, R>
                 smallest_interesting: test_case::Interesting,
                 orig_size: u64)
                 -> error::Result<()> {
+        let _signpost = signposts::SupervisorShutdown::new();
+
         self.logger
             .final_reduced_size(smallest_interesting.size(), orig_size);
         drop(self.logger);
@@ -222,6 +227,8 @@ impl<I, R> SupervisorActor<I, R>
     /// the worker if our reducer is exhausted.
     fn send_next_reduction_to(&mut self, who: Worker) -> error::Result<()> {
         assert!(self.workers.contains_key(&who.id()));
+
+        let _signpost = signposts::SupervisorNextReduction::new();
         self.logger.start_generating_next_reduction();
 
         if let Some(reduction) = self.opts
@@ -253,6 +260,8 @@ impl<I, R> SupervisorActor<I, R>
         smallest_interesting: &mut test_case::Interesting,
         interesting: test_case::Interesting,
 ) -> error::Result<()>{
+        let _signpost = signposts::SupervisorHandleInteresting::new();
+
         let new_size = interesting.size();
         let old_size = smallest_interesting.size();
 

@@ -6,6 +6,7 @@ use either::{Either, Left, Right};
 use error;
 use git::{self, RepoExt};
 use git2;
+use signposts;
 use std::fmt;
 use std::panic;
 use std::path;
@@ -263,6 +264,8 @@ impl WorkerActor {
     }
 
     fn get_next_reduction(self) -> Option<Test> {
+        let _signpost = signposts::WorkerGetNextReduction::new();
+
         self.supervisor.request_next_reduction(self.me.clone());
         match self.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => self.shutdown(),
@@ -286,6 +289,8 @@ impl WorkerActor {
 
 impl Test {
     fn judge(self) -> error::Result<Either<Interesting, WorkerActor>> {
+        let _signpost = signposts::WorkerJudgeInteresting::new();
+
         self.worker
             .logger
             .start_judging_interesting(self.worker.id);
@@ -314,6 +319,8 @@ impl Test {
 
 impl Interesting {
     fn report_to_supervisor(self) -> Either<TryMerge, Option<Test>> {
+        let _signpost = signposts::WorkerReportInteresting::new();
+
         self.worker
             .supervisor
             .report_interesting(
@@ -360,6 +367,8 @@ impl TryMerge {
         // kill the whole worker and rely on the supervisor to spawn a new one
         // in its stead, which seems fairly heavy for something we expect to
         // happen fairly often.
+
+        let _signpost = signposts::WorkerTryMerging::new();
 
         self.worker
             .logger

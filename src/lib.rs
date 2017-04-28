@@ -22,6 +22,7 @@ pub mod error;
 mod git;
 pub mod interesting;
 pub mod reducers;
+mod signposts;
 pub mod test_case;
 pub mod traits;
 
