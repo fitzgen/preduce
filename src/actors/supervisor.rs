@@ -297,7 +297,7 @@ impl<I, R> SupervisorActor<I, R>
             // even smaller. Unless it is already a merge, in which case, we
             // abandon this thread of traversal.
             self.logger.is_not_smaller();
-            if interesting.provenance() == Some("merge") {
+            if !self.opts.should_try_merging() || interesting.provenance() == Some("merge") {
                 self.send_next_reduction_to(who)?;
             } else {
                 who.try_merge(old_size, self.repo.head_id()?);

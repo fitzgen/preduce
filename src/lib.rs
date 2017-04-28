@@ -58,7 +58,8 @@ where
     test_case: path::PathBuf,
     is_interesting: I,
     reducer: R,
-    workers: usize
+    workers: usize,
+    try_merging: bool,
 }
 
 /// APIs for configuring options and spawning the reduction process.
@@ -87,7 +88,8 @@ where
             test_case: test_case.into(),
             is_interesting: is_interesting,
             reducer: reducers::Fuse::new(reducer),
-            workers: num_cpus::get()
+            workers: num_cpus::get(),
+            try_merging: true,
         }
     }
 
@@ -112,6 +114,27 @@ where
     pub fn workers(mut self, num_workers: usize) -> Options<I, R> {
         assert!(num_workers != 0);
         self.workers = num_workers;
+        self
+    }
+
+    /// Whether we should try merging the globally smallest interesting test
+    /// case with an interesting but not smallest test case, to see if that
+    /// merge is smaller and also interesting.
+    ///
+    /// By default, `preduce` will try merging.
+    ///
+    /// ```
+    /// let predicate = preduce::interesting::Script::new("is_interesting.sh");
+    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh");
+    /// let test_case = "path/to/test-case";
+    ///
+    /// let opts = preduce::Options::new(predicate, reducer, test_case)
+    ///     // Do not try merges.
+    ///     .try_merging(false);
+    /// # let _ = opts;
+    /// ```
+    pub fn try_merging(mut self, should_try_merging: bool) -> Options<I, R> {
+        self.try_merging = should_try_merging;
         self
     }
 
@@ -145,6 +168,11 @@ where
     pub fn num_workers(&self) -> usize {
         assert!(self.workers > 0);
         self.workers
+    }
+
+    /// Get whether this `Options` is configured to try merging or not.
+    pub fn should_try_merging(&self) -> bool {
+        self.try_merging
     }
 
     /// Get this `Options`' `IsInteresting` predicate.
