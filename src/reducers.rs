@@ -119,8 +119,7 @@ impl Script {
         cmd.current_dir(self.out_dir.as_ref().unwrap().path())
             .arg(self.seed.as_ref().unwrap().path())
             .stdin(process::Stdio::piped())
-            .stdout(process::Stdio::piped())
-            .stderr(process::Stdio::null());
+            .stdout(process::Stdio::piped());
 
         let mut child = cmd.spawn()?;
         let stdout = child.stdout.take().unwrap();
