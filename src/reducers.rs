@@ -142,6 +142,81 @@ impl Script {
         self.counter += 1;
         test_case::TempFile::new(self.out_dir.as_ref().unwrap().clone(), file_path)
     }
+
+    fn next_potential_reduction_impl(&mut self)
+                                     -> error::Result<Option<test_case::PotentialReduction>> {
+        assert!(self.out_dir.is_some() && self.child.is_some() && self.child_stdout.is_some());
+
+        let temp_file = self.next_temp_file().or_else(|e| {
+            self.kill_child();
+            Err(e)
+        })?;
+
+        // Write the desired path of the next reduction to the child's stdin. If
+        // this fails, then the child already exited, presumably because it
+        // determined it could not generate any reductions from the test file.
+        if {
+            let mut child = self.child.as_mut().unwrap();
+            let mut child_stdin = child.stdin.as_mut().unwrap();
+            write!(child_stdin, "{}\n", temp_file.path().display()).is_err()
+        } {
+            self.kill_child();
+            return Ok(None);
+        }
+
+        // Read the newline response from the child's stdout, indicating that
+        // the child has finished generating the reduction.
+        let mut newline = [0];
+        if {
+            let mut child_stdout = self.child_stdout.as_mut().unwrap();
+            child_stdout.read_exact(&mut newline).is_err()
+        } {
+            self.kill_child();
+            return Ok(None);
+        }
+
+        if newline[0] != b'\n' {
+            self.kill_child();
+            let details = format!(
+                "'{}' is not conforming to the reducer script protocol: \
+                                   expected a newline response",
+                self.program.to_string_lossy()
+            );
+            return Err(error::Error::MisbehavingReducerScript(details));
+        }
+
+        if !temp_file.path().is_file() {
+            self.kill_child();
+            let details = format!(
+                "'{}' did not generate a test case file at {}",
+                self.program.to_string_lossy(),
+                temp_file.path().display()
+            );
+            return Err(error::Error::MisbehavingReducerScript(details));
+        }
+
+        let reduction = test_case::PotentialReduction::new(
+            self.seed.clone().unwrap(),
+            self.program.to_string_lossy(),
+            temp_file
+        )?;
+
+        if self.strict {
+            let seed_size = self.seed.as_ref().unwrap().size();
+            if reduction.size() >= seed_size {
+                self.kill_child();
+                let details = format!(
+                    "'{}' is generating reductions that are greater than or equal the seed's size: {} >= {}",
+                    self.program.to_string_lossy(),
+                    reduction.size(),
+                    seed_size
+                );
+                return Err(error::Error::MisbehavingReducerScript(details));
+            }
+        }
+
+        Ok(Some(reduction))
+    }
 }
 
 impl Drop for Script {
@@ -171,68 +246,13 @@ impl Reducer for Script {
             self.spawn_child()?;
         }
 
-        assert!(self.out_dir.is_some() && self.child.is_some() && self.child_stdout.is_some());
-
-        let temp_file = self.next_temp_file()?;
-
-        // Write a newline to the child's stdin. If this fails, then the child
-        // already exited, presumably because it determined it could not
-        // generate any reductions from the test file.
-        if {
-               let mut child = self.child.as_mut().unwrap();
-               let mut stdin = child.stdin.as_mut().unwrap();
-               write!(stdin, "{}\n", temp_file.path().display()).is_err()
-           } {
-            self.kill_child();
-            return Ok(None);
-        }
-
-        // Read the path of the next potential reduction from the child's
-        // stdout.
-        let mut child_stdout = self.child_stdout.as_mut().unwrap();
-        let mut newline = [0];
-        if child_stdout.read_exact(&mut newline).is_err() {
-            return Ok(None);
-        }
-
-        if newline[0] != b'\n' {
-            let details = format!(
-                "'{}' is not conforming to the reducer script protocol: \
-                                   expected a newline response",
-                self.program.to_string_lossy()
-            );
-            return Err(error::Error::MisbehavingReducerScript(details));
-        }
-
-        if !temp_file.path().is_file() {
-            let details = format!(
-                "'{}' did not generate a test case file at {}",
-                self.program.to_string_lossy(),
-                temp_file.path().display()
-            );
-            return Err(error::Error::MisbehavingReducerScript(details));
-        }
-
-        let reduction = test_case::PotentialReduction::new(
-            self.seed.clone().unwrap(),
-            self.program.to_string_lossy(),
-            temp_file
-        )?;
-
-        if self.strict {
-            let seed_size = self.seed.as_ref().unwrap().size();
-            if reduction.size() >= seed_size {
-                let details = format!(
-                    "'{}' is generating reductions that are greater than or equal the seed's size: {} >= {}",
-                    self.program.to_string_lossy(),
-                    reduction.size(),
-                    seed_size
-                );
-                return Err(error::Error::MisbehavingReducerScript(details));
+        match self.next_potential_reduction_impl() {
+            result @ Ok(_) => result,
+            result @ Err(_) => {
+                self.kill_child();
+                result
             }
         }
-
-        Ok(Some(reduction))
     }
 }
 
