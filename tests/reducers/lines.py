@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import os
-import random
 import sys
 
 # The initial seed test case is the first and only argument.
