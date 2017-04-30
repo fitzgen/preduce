@@ -12,6 +12,16 @@ use tempdir;
 use test_case::{self, TestCaseMethods};
 use traits::Reducer;
 
+impl Reducer for Box<Reducer> {
+    fn set_seed(&mut self, seed: test_case::Interesting) {
+        (**self).set_seed(seed)
+    }
+
+    fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
+        (**self).next_potential_reduction()
+    }
+}
+
 /// A test case reducer that is implemented as an external script.
 ///
 /// ### IPC Protocol
