@@ -20,6 +20,11 @@ fn parse_args() -> clap::ArgMatches<'static> {
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
         .arg(
+            clap::Arg::with_name("test-case")
+                .required(true)
+                .help("The initial test case to reduce.")
+        )
+        .arg(
             clap::Arg::with_name("predicate")
                 .required(true)
                 .help("The is-interesting predicate script.")
@@ -27,12 +32,9 @@ fn parse_args() -> clap::ArgMatches<'static> {
         .arg(
             clap::Arg::with_name("reducer")
                 .required(true)
-                .help("The reduction generator script.")
-        )
-        .arg(
-            clap::Arg::with_name("test-case")
-                .required(true)
-                .help("The initial test case to reduce.")
+                .multiple(true)
+                .min_values(1)
+                .help("The reduction generator scripts. There must be at least one.")
         )
         .arg(
             clap::Arg::with_name("workers")
@@ -70,8 +72,20 @@ fn try_main() -> preduce::error::Result<()> {
     let predicate = args.value_of("predicate").unwrap();
     let predicate = preduce::interesting::Script::new(predicate);
 
-    let reducer = args.value_of("reducer").unwrap();
-    let reducer = preduce::reducers::Script::new(reducer);
+    let mut reducers = args.values_of("reducer").unwrap();
+    let reducer = match (reducers.next(), reducers.next()) {
+        (Some(r), None) => Box::new(preduce::reducers::Script::new(r)) as Box<preduce::traits::Reducer>,
+        (Some(r1), Some(r2)) => {
+            let init = Box::new(preduce::reducers::Chain::new(preduce::reducers::Script::new(r1),
+                                                              preduce::reducers::Script::new(r2)));
+            let init = init as Box<preduce::traits::Reducer>;
+            reducers.fold(init, |acc, r| {
+                Box::new(preduce::reducers::Chain::new(acc, preduce::reducers::Script::new(r)))
+                    as Box<preduce::traits::Reducer>
+            })
+        }
+        _ => unreachable!(),
+    };
 
     let test_case = args.value_of("test-case").unwrap();
 
