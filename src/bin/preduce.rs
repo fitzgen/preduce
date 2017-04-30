@@ -55,6 +55,12 @@ fn parse_args() -> clap::ArgMatches<'static> {
                         CPUs."
                 )
         )
+        .arg(
+            clap::Arg::with_name("no_merging")
+                .short("n")
+                .long("no-merging")
+                .help("Do not attempt to do merges of interesting test cases.")
+        )
         .get_matches()
 }
 
@@ -74,6 +80,10 @@ fn try_main() -> preduce::error::Result<()> {
     if let Some(num_workers) = args.value_of("workers") {
         let num_workers = num_workers.parse::<usize>().unwrap();
         options = options.workers(num_workers);
+    }
+
+    if args.is_present("no_merging") {
+        options = options.try_merging(false);
     }
 
     options.run()
