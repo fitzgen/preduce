@@ -1,6 +1,7 @@
 //! Interfaces and common behaviors.
 
 use error;
+use std::fmt;
 use std::path;
 use test_case;
 
@@ -15,7 +16,7 @@ use test_case;
 /// * Etc...
 ///
 /// This is analogous to a "pass" in creduce.
-pub trait Reducer: Send {
+pub trait Reducer: fmt::Debug + Send {
     /// Configure this reducer to use generate potential reductions from the
     /// given seed test case.
     fn set_seed(&mut self, seed: test_case::Interesting);
