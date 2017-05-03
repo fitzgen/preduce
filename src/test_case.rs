@@ -211,6 +211,7 @@ impl PotentialReduction {
         I: ?Sized + traits::IsInteresting,
     {
         assert_eq!(repo.state(), git2::RepositoryState::Clean);
+        assert!(self.path().is_file());
 
         if !judge.is_interesting(self.path())? {
             return Ok(None);

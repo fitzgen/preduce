@@ -3,7 +3,6 @@
 extern crate rand;
 
 use error;
-use std::ffi;
 use std::io::{Read, Write};
 use std::path;
 use std::process;
@@ -73,7 +72,7 @@ impl Reducer for Box<Reducer> {
 /// use preduce::traits::Reducer;
 ///
 /// # fn main() { fn _foo() {
-/// let mut script = preduce::reducers::Script::new("/path/to/reducer/script");
+/// let mut script = preduce::reducers::Script::new("/path/to/reducer/script").unwrap();
 ///
 /// # let some_seed_test_case = || unimplemented!();
 /// script.set_seed(some_seed_test_case());
@@ -85,7 +84,7 @@ impl Reducer for Box<Reducer> {
 /// ```
 #[derive(Debug)]
 pub struct Script {
-    program: ffi::OsString,
+    program: path::PathBuf,
     out_dir: Option<Arc<tempdir::TempDir>>,
     counter: usize,
     seed: Option<test_case::Interesting>,
@@ -96,19 +95,25 @@ pub struct Script {
 
 impl Script {
     /// Construct a reducer script with the given `program`.
-    pub fn new<S>(program: S) -> Script
+    pub fn new<S>(program: S) -> error::Result<Script>
     where
-        S: Into<ffi::OsString>,
+        S: AsRef<path::Path>,
     {
-        Script {
-            program: program.into(),
+        if !program.as_ref().is_file() {
+            return Err(error::Error::DoesNotExist(program.as_ref().into()));
+        }
+
+        let program = program.as_ref().canonicalize()?;
+
+        Ok(Script {
+            program: program,
             out_dir: None,
             counter: 0,
             seed: None,
             child: None,
             child_stdout: None,
             strict: false
-        }
+        })
     }
 
     /// Enable or disable extra strict checks on the reducer script.
@@ -288,7 +293,7 @@ impl Reducer for Script {
 ///
 /// # fn main() { fn _foo() {
 /// // Take some extant reducer.
-/// let reducer = preduce::reducers::Script::new("/path/to/reducer/script");
+/// let reducer = preduce::reducers::Script::new("/path/to/reducer/script").unwrap();
 ///
 /// // And then use `Shuffle` to randomly reorder its generated reductions in
 /// // batches of 100 at a time.
@@ -375,8 +380,8 @@ enum ChainState {
 /// use preduce::traits::Reducer;
 ///
 /// # fn main() { fn _foo() {
-/// let first = preduce::reducers::Script::new("/path/to/first/reducer/script");
-/// let second = preduce::reducers::Script::new("/path/to/second/reducer/script");
+/// let first = preduce::reducers::Script::new("/path/to/first/reducer/script").unwrap();
+/// let second = preduce::reducers::Script::new("/path/to/second/reducer/script").unwrap();
 /// let mut chained = preduce::reducers::Chain::new(first, second);
 ///
 /// # let some_seed_test_case = || unimplemented!();
@@ -460,7 +465,7 @@ where
 /// use preduce::traits::Reducer;
 ///
 /// # fn main() { fn _foo() {
-/// let script = preduce::reducers::Script::new("/path/to/some/reducer/script");
+/// let script = preduce::reducers::Script::new("/path/to/some/reducer/script").unwrap();
 /// let mut fused = preduce::reducers::Fuse::new(script);
 ///
 /// # let some_seed_test_case = || unimplemented!();
@@ -531,7 +536,7 @@ mod tests {
     #[test]
     fn script() {
         env::set_var("PREDUCE_COUNTING_ITERATIONS", "6");
-        let mut reducer = Script::new(get_reducer("counting.sh"));
+        let mut reducer = Script::new(get_reducer("counting.sh")).unwrap();
 
         reducer.set_seed(test_case::Interesting::testing_only_new());
 
@@ -546,7 +551,7 @@ mod tests {
     #[test]
     fn shuffle() {
         env::set_var("PREDUCE_COUNTING_ITERATIONS", "6");
-        let reducer = Script::new(get_reducer("counting.sh"));
+        let reducer = Script::new(get_reducer("counting.sh")).unwrap();
         let mut reducer = Shuffle::new(3, reducer);
 
         reducer.set_seed(test_case::Interesting::testing_only_new());
@@ -589,8 +594,8 @@ mod tests {
     #[test]
     fn chain() {
         env::set_var("PREDUCE_COUNTING_ITERATIONS", "6");
-        let first = Script::new(get_reducer("counting.sh"));
-        let second = Script::new(get_reducer("alphabet.sh"));
+        let first = Script::new(get_reducer("counting.sh")).unwrap();
+        let second = Script::new(get_reducer("alphabet.sh")).unwrap();
         let mut reducer = Chain::new(first, second);
 
         reducer.set_seed(test_case::Interesting::testing_only_new());
@@ -621,6 +626,7 @@ mod tests {
 
     #[test]
     fn fuse() {
+        #[derive(Debug)]
         struct Erratic(usize);
 
         impl Reducer for Erratic {

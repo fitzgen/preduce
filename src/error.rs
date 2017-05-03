@@ -5,6 +5,7 @@ use std::any::Any;
 use std::error;
 use std::fmt;
 use std::io;
+use std::path;
 
 /// The kinds of errors that can happen when running `preduce`.
 #[derive(Debug)]
@@ -25,7 +26,10 @@ pub enum Error {
     TestCaseBackupFailure(io::Error),
 
     /// The initial test case did not pass the is-interesting predicate.
-    InitialTestCaseNotInteresting
+    InitialTestCaseNotInteresting,
+
+    /// There is no file at the given path, when we expected one.
+    DoesNotExist(path::PathBuf),
 }
 
 impl fmt::Display for Error {
@@ -46,6 +50,9 @@ impl fmt::Display for Error {
                     "The initial test case did not pass the is-interesting predicate"
                 )
             }
+            Error::DoesNotExist(ref file_path) => {
+                write!(f, "The file does not exist: {}", file_path.display())
+            }
         }
     }
 }
@@ -59,6 +66,7 @@ impl error::Error for Error {
             Error::MisbehavingReducerScript(_) => "Misbehaving reducer script",
             Error::TestCaseBackupFailure(_) => "Could not backup initial test case",
             Error::InitialTestCaseNotInteresting => "The initial test case did not pass the is-interesting predicate",
+            Error::DoesNotExist(_) => "There is no file at the given path, but we expected one",
         }
     }
 }

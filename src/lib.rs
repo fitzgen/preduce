@@ -36,8 +36,8 @@ use std::path;
 ///
 /// ```
 /// # fn _ignore() -> preduce::error::Result<()> {
-/// let predicate = preduce::interesting::Script::new("is_interesting.sh");
-/// let reducer = preduce::reducers::Script::new("generate_reductions.sh");
+/// let predicate = preduce::interesting::Script::new("is_interesting.sh")?;
+/// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
 /// let test_case = "path/to/test-case";
 ///
 /// // Construct the `Options` builder.
@@ -74,11 +74,14 @@ where
     /// reduction generator, and the initial test case.
     ///
     /// ```
-    /// let predicate = preduce::interesting::Script::new("is_interesting.sh");
-    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh");
+    /// # fn _ignore() -> preduce::error::Result<()> {
+    /// let predicate = preduce::interesting::Script::new("is_interesting.sh")?;
+    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
     ///
     /// let opts = preduce::Options::new(predicate, reducer, "path/to/test-case");
     /// # let _ = opts;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new<P>(is_interesting: I, reducer: R, test_case: P) -> Options<I, reducers::Fuse<R>>
     where
@@ -97,8 +100,9 @@ where
     /// test case for interesting-ness in parallel.
     ///
     /// ```
-    /// let predicate = preduce::interesting::Script::new("is_interesting.sh");
-    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh");
+    /// # fn _ignore() -> preduce::error::Result<()> {
+    /// let predicate = preduce::interesting::Script::new("is_interesting.sh")?;
+    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
     /// let test_case = "path/to/test-case";
     ///
     /// let opts = preduce::Options::new(predicate, reducer, test_case)
@@ -106,6 +110,8 @@ where
     ///     // default.
     ///     .workers(4);
     /// # let _ = opts;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// ### Panics
@@ -124,14 +130,17 @@ where
     /// By default, `preduce` will try merging.
     ///
     /// ```
-    /// let predicate = preduce::interesting::Script::new("is_interesting.sh");
-    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh");
+    /// # fn _ignore() -> preduce::error::Result<()> {
+    /// let predicate = preduce::interesting::Script::new("is_interesting.sh")?;
+    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
     /// let test_case = "path/to/test-case";
     ///
     /// let opts = preduce::Options::new(predicate, reducer, test_case)
     ///     // Do not try merges.
     ///     .try_merging(false);
     /// # let _ = opts;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn try_merging(mut self, should_try_merging: bool) -> Options<I, R> {
         self.try_merging = should_try_merging;
@@ -143,8 +152,8 @@ where
     ///
     /// ```
     /// # fn _ignore() -> preduce::error::Result<()> {
-    /// let predicate = preduce::interesting::Script::new("is_interesting.sh");
-    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh");
+    /// let predicate = preduce::interesting::Script::new("is_interesting.sh")?;
+    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
     /// let test_case = "path/to/test-case";
     ///
     /// preduce::Options::new(predicate, reducer, test_case).run()?;

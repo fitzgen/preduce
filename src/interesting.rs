@@ -1,7 +1,6 @@
 //! Implementations of the `IsInteresting` trait.
 
 use error;
-use std::ffi;
 use std::fs;
 use std::panic::UnwindSafe;
 use std::path;
@@ -73,7 +72,7 @@ impl IsInteresting for NonEmpty {
 /// # fn _foo() {
 ///
 /// // Construct the is-interesting test that uses `my_test.sh`.
-/// let test = preduce::interesting::Script::new("/path/to/my_test.sh");
+/// let test = preduce::interesting::Script::new("/path/to/my_test.sh").unwrap();
 ///
 /// // Now run the test on some random data.
 /// # fn get_some_random_test_case() -> &'static ::std::path::Path { unimplemented!() }
@@ -88,23 +87,33 @@ impl IsInteresting for NonEmpty {
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Script {
-    program: ffi::OsString
+    program: path::PathBuf,
 }
 
 impl Script {
     /// Construct a new `Script` is-interesting test that runs the given program.
-    pub fn new<S>(program: S) -> Script
+    pub fn new<S>(program: S) -> error::Result<Script>
     where
-        S: Into<ffi::OsString>,
+        S: AsRef<path::Path>,
     {
-        Script { program: program.into() }
+        if !program.as_ref().is_file() {
+            return Err(error::Error::DoesNotExist(program.as_ref().into()));
+        }
+
+        let program = program.as_ref().canonicalize()?;
+        Ok(Script { program: program })
     }
 }
 
 impl IsInteresting for Script {
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
-        let mut cmd = process::Command::new(&self.program);
+        assert!(potential_reduction.is_file(),
+                "The potential reduction had better be a file");
+        assert!(path::PathBuf::from(self.program.clone()).is_file(),
+                "Interesting script must be an extant file");
 
+
+        let mut cmd = process::Command::new(&self.program);
         cmd.stdout(process::Stdio::null())
             .stderr(process::Stdio::null())
             .stdin(process::Stdio::null());
@@ -145,7 +154,7 @@ impl IsInteresting for Script {
 ///     // A relatively cheap check.
 ///     preduce::interesting::NonEmpty,
 ///     // An expensive check.
-///     preduce::interesting::Script::new("/path/to/expensive/script")
+///     preduce::interesting::Script::new("/path/to/expensive/script").unwrap()
 /// );
 ///
 /// # fn get_some_random_test_case() -> &'static ::std::path::Path { unimplemented!() }
@@ -204,8 +213,8 @@ where
 /// # fn main() { fn _foo() {
 ///
 /// let test = preduce::interesting::Or::new(
-///     preduce::interesting::Script::new("/path/to/first/script"),
-///     preduce::interesting::Script::new("/path/to/second/script")
+///     preduce::interesting::Script::new("/path/to/first/script").unwrap(),
+///     preduce::interesting::Script::new("/path/to/second/script").unwrap()
 /// );
 ///
 /// # fn get_some_random_test_case() -> &'static ::std::path::Path { unimplemented!() }
@@ -279,6 +288,12 @@ mod tests {
     use test_case;
     use test_utils::*;
 
+    fn temp_file() -> test_case::TempFile {
+        let test_case = test_case::TempFile::anonymous().unwrap();
+        fs::File::create(test_case.path()).unwrap();
+        test_case
+    }
+
     #[test]
     fn non_empty_file_is_interesting() {
         let tmp = test_case::TempFile::anonymous().unwrap();
@@ -292,30 +307,29 @@ mod tests {
 
     #[test]
     fn empty_file_is_not_interesting() {
-        let tmp = test_case::TempFile::anonymous().unwrap();
-        fs::File::create(tmp.path()).unwrap();
+        let tmp = temp_file();
         let is_interesting = NonEmpty.is_interesting(tmp.path()).unwrap();
         assert!(!is_interesting);
     }
 
     #[test]
     fn exit_zero_is_interesting() {
-        let test = Script::new(get_exit_0());
-        let test_case = test_case::TempFile::anonymous().unwrap();
+        let test = Script::new(get_exit_0()).unwrap();
+        let test_case = temp_file();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn exit_non_zero_is_not_interesting() {
-        let test = Script::new(get_exit_1());
-        let test_case = test_case::TempFile::anonymous().unwrap();
+        let test = Script::new(get_exit_1()).unwrap();
+        let test_case = temp_file();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn and_both_true() {
-        let test = And::new(Script::new(get_exit_0()), Script::new(get_exit_0()));
-        let test_case = test_case::TempFile::anonymous().expect("should create anonymous file");
+        let test = And::new(Script::new(get_exit_0()).unwrap(), Script::new(get_exit_0()).unwrap());
+        let test_case = temp_file();
         assert!(
             test.is_interesting(test_case.path())
                 .expect("is interesting should return Ok")
@@ -324,29 +338,29 @@ mod tests {
 
     #[test]
     fn and_one_false() {
-        let test = And::new(Script::new(get_exit_0()), Script::new(get_exit_1()));
-        let test_case = test_case::TempFile::anonymous().unwrap();
+        let test = And::new(Script::new(get_exit_0()).unwrap(), Script::new(get_exit_1()).unwrap());
+        let test_case = temp_file();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_first_true() {
-        let test = Or::new(Script::new(get_exit_0()), Script::new(get_exit_1()));
-        let test_case = test_case::TempFile::anonymous().unwrap();
+        let test = Or::new(Script::new(get_exit_0()).unwrap(), Script::new(get_exit_1()).unwrap());
+        let test_case = temp_file();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_second_true() {
-        let test = Or::new(Script::new(get_exit_1()), Script::new(get_exit_0()));
-        let test_case = test_case::TempFile::anonymous().unwrap();
+        let test = Or::new(Script::new(get_exit_1()).unwrap(), Script::new(get_exit_0()).unwrap());
+        let test_case = temp_file();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_both_false() {
-        let test = Or::new(Script::new(get_exit_1()), Script::new(get_exit_1()));
-        let test_case = test_case::TempFile::anonymous().unwrap();
+        let test = Or::new(Script::new(get_exit_1()).unwrap(), Script::new(get_exit_1()).unwrap());
+        let test_case = temp_file();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
 
@@ -354,7 +368,7 @@ mod tests {
     fn func_returns_true() {
         let test = |_: &path::Path| Ok(true);
         let test = &test;
-        let test_case = test_case::TempFile::anonymous().unwrap();
+        let test_case = temp_file();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
@@ -362,7 +376,7 @@ mod tests {
     fn func_returns_false() {
         let test = |_: &path::Path| Ok(false);
         let test = &test;
-        let test_case = test_case::TempFile::anonymous().unwrap();
+        let test_case = temp_file();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
 }

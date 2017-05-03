@@ -70,19 +70,23 @@ fn try_main() -> preduce::error::Result<()> {
     let args = parse_args();
 
     let predicate = args.value_of("predicate").unwrap();
-    let predicate = preduce::interesting::Script::new(predicate);
+    let predicate = preduce::interesting::Script::new(predicate)?;
 
     let mut reducers = args.values_of("reducer").unwrap();
     let reducer = match (reducers.next(), reducers.next()) {
-        (Some(r), None) => Box::new(preduce::reducers::Script::new(r)) as Box<preduce::traits::Reducer>,
+        (Some(r), None) => Box::new(preduce::reducers::Script::new(r)?) as Box<preduce::traits::Reducer>,
         (Some(r1), Some(r2)) => {
-            let init = Box::new(preduce::reducers::Chain::new(preduce::reducers::Script::new(r1),
-                                                              preduce::reducers::Script::new(r2)));
+            let init = Box::new(preduce::reducers::Chain::new(preduce::reducers::Script::new(r1)?,
+                                                              preduce::reducers::Script::new(r2)?));
             let init = init as Box<preduce::traits::Reducer>;
-            reducers.fold(init, |acc, r| {
-                Box::new(preduce::reducers::Chain::new(acc, preduce::reducers::Script::new(r)))
-                    as Box<preduce::traits::Reducer>
-            })
+            let chained: preduce::error::Result<Box<preduce::traits::Reducer>> =
+                reducers.fold(Ok(init), |acc, r| {
+                    let acc = acc?;
+                    let script = preduce::reducers::Script::new(r)?;
+                    let chained = preduce::reducers::Chain::new(acc, script);
+                    Ok(Box::new(chained) as Box<preduce::traits::Reducer>)
+                });
+            chained?
         }
         _ => unreachable!(),
     };
