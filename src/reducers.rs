@@ -153,8 +153,15 @@ impl Script {
     }
 
     fn next_temp_file(&mut self) -> error::Result<test_case::TempFile> {
-        let file_path = path::PathBuf::from(self.counter.to_string());
+        let mut file_name = String::from("reduction");
+        file_name.push_str(&self.counter.to_string());
         self.counter += 1;
+
+        let mut file_path = path::PathBuf::from(file_name);
+        if let Some(ext) = self.seed.as_ref().unwrap().path().extension() {
+            file_path.set_extension(ext);
+        }
+
         test_case::TempFile::new(self.out_dir.as_ref().unwrap().clone(), file_path)
     }
 
