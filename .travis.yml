@@ -1,0 +1,60 @@
+sudo: false
+
+language: rust
+
+# libssh2-sys, used by git2, requires a newer cmake than exists on Travis's
+# default setup.
+addons:
+  apt:
+    sources:
+      - kalakris-cmake
+    packages:
+      - cmake
+
+rust:
+  - stable
+  - beta
+  - nightly
+
+cache: cargo
+
+env:
+  matrix:
+    - JOB="build" PROFILE=""          FEATURES=""
+    - JOB="test"  PROFILE=""          FEATURES=""
+    # JOB="bench" PROFILE=""          FEATURES=""
+    - JOB="build" PROFILE="--release" FEATURES=""
+    - JOB="test"  PROFILE="--release" FEATURES=""
+    - JOB="bench" PROFILE="--release" FEATURES=""
+    - JOB="build" PROFILE=""          FEATURES="signpost"
+    - JOB="test"  PROFILE=""          FEATURES="signpost"
+    # JOB="bench" PROFILE=""          FEATURES="signpost"
+    - JOB="build" PROFILE="--release" FEATURES="signpost"
+    - JOB="test"  PROFILE="--release" FEATURES="signpost"
+    - JOB="bench" PROFILE="--release" FEATURES="signpost"
+
+matrix:
+  fast_finish: true
+  allow_failures:
+    -rust: nightly
+
+script: |
+  case "$JOB" in
+      "build")
+          cargo build $PROFILE --verbose --features "$FEATURES"
+          ;;
+      "test")
+          cargo test $PROFILE --verbose --features "$FEATURES"
+          ;;
+      "bench")
+          if [[ "$PROFILE" != "--release" ]]; then
+              echo Benching a non-release build??
+              exit 1
+          fi
+          cargo bench --verbose --features "$FEATURES"
+          ;;
+      *)
+          echo Unknown job: "$JOB"
+          exit 1
+          ;;
+  esac
