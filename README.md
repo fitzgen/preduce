@@ -7,6 +7,8 @@ made below are likely false.**
 
 # `preduce`
 
+[![Build Status](https://travis-ci.org/fitzgen/preduce.png?branch=master)](https://travis-ci.org/fitzgen/preduce)
+
 A parallel, language-agnostic, automatic test case reducer.
 
 `preduce` takes a large test case that exhibits some interesting behavior (such
