@@ -272,22 +272,22 @@ impl Interesting {
     {
         assert_eq!(repo.state(), git2::RepositoryState::Clean);
 
-        if !judge.is_interesting(file_path.as_ref())? {
-            return Ok(None);
-        }
-
-        let size = fs::metadata(&file_path)?.len();
-
-        // Copy to the repository's test case path and make a commit.
-        let repo_test_case_path = repo.test_case_path()?;
-        fs::copy(file_path.as_ref(), &repo_test_case_path)?;
-        let msg = format!("Initial - {} - {}", size, file_path.as_ref().display());
-        let commit_id = repo.commit_test_case(&msg)?;
-
         // Create a new immutable temp file for seeding reducers with the
         // initial test case.
         let temp_file = TempFile::anonymous()?;
         fs::copy(file_path.as_ref(), temp_file.path())?;
+
+        if !judge.is_interesting(temp_file.path())? {
+            return Ok(None);
+        }
+
+        let size = fs::metadata(temp_file.path())?.len();
+
+        // Copy to the repository's test case path and make a commit.
+        let repo_test_case_path = repo.test_case_path()?;
+        fs::copy(file_path.as_ref(), &repo_test_case_path)?;
+        let msg = format!("Initial - {} - {}", size, temp_file.path().display());
+        let commit_id = repo.commit_test_case(&msg)?;
 
         Ok(
             Some(
@@ -451,28 +451,27 @@ mod tests {
     #[test]
     fn interesting_initial_false() {
         let repo = TempRepo::new("interesting_initial_false").expect("should create temp repo");
-        let mut path = path::PathBuf::from(repo.path());
-        path.pop();
-        path.push("initial");
+        let temp_file = TempFile::anonymous().unwrap();
+        fs::File::create(temp_file.path()).unwrap();
 
         let judge = |_: &path::Path| Ok(false);
         let judge = &judge;
 
-        let interesting = Interesting::initial(path, &judge, &repo).expect("should not error");
+        let interesting = Interesting::initial(temp_file.path(), &judge, &repo)
+            .expect("should not error");
         assert!(interesting.is_none());
     }
 
     #[test]
     fn interesting_initial_error() {
         let repo = TempRepo::new("interesting_initial_error").expect("should create temp repo");
-        let mut path = path::PathBuf::from(repo.path());
-        path.pop();
-        path.push("initial");
+        let temp_file = TempFile::anonymous().unwrap();
+        fs::File::create(temp_file.path()).unwrap();
 
         let judge = |_: &path::Path| Err(error::Error::Git(git2::Error::from_str("woops")));
         let judge = &judge;
 
-        let result = Interesting::initial(path, &judge, &repo);
+        let result = Interesting::initial(temp_file.path(), &judge, &repo);
         assert!(result.is_err());
     }
 

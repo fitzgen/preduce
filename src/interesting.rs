@@ -107,11 +107,8 @@ impl Script {
 
 impl IsInteresting for Script {
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
-        assert!(potential_reduction.is_file(),
-                "The potential reduction had better be a file");
-        assert!(path::PathBuf::from(self.program.clone()).is_file(),
-                "Interesting script must be an extant file");
-
+        assert!(potential_reduction.is_file());
+        assert!(self.program.is_file());
 
         let mut cmd = process::Command::new(&self.program);
         cmd.stdout(process::Stdio::null())
