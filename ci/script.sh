@@ -8,7 +8,6 @@ case "$JOB" in
         ;;
     "test")
         cargo test $PROFILE --verbose --features "$FEATURES"
-        ./tests/tests.sh
         ;;
     "bench")
         if [[ "$PROFILE" != "--release" ]]; then
