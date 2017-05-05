@@ -9,18 +9,29 @@ cd $(dirname $0)
 : ${PROFILE:=""}
 : ${FEATURES:=""}
 
+# Travis CI is a bit over-eager about cleaning up the tempdir.
+if [[ "${CI:=''}" == "true" ]]; then
+    export TMPDIR=$(pwd)
+fi
+
 # Do a full preduce reduction run.
 #
 # Usage: test_preduce_run <fixture-name> <predicate>
 function test_preduce_run {
+    fixture=$1
+    predicate=$2
+
     cargo run $PROFILE --features "$FEATURES" -- \
-          "fixtures/$1" "$2" ../reducers/*
+          "fixtures/$fixture" "$predicate" ../reducers/*.py
+
+    # Ensure that the reduced file is still interesting.
+    "$predicate" "fixtures/$fixture"
 
     # Diff exits 0 if they're the same, non-zero if there is any diff.
-    diff -U8 "fixtures/$1" "expectations/$1"
+    diff -U8 "expectations/$fixture" "fixtures/$fixture"
 
     # Replace the unreduced fixture file.
-    mv "fixtures/$1.orig" "fixtures/$1"
+    mv "fixtures/$fixture.orig" "fixtures/$fixture"
 }
 
 # Test a reducer's generated reductions.
@@ -40,6 +51,8 @@ function test_reducer {
     # it.
     (sleep 999999999999 > "$child_stdin")&
     sleep_pid=$!
+    (sleep 999999999999 > "$child_stdout")&
+    sleep_pid2=$!
 
     # Spawn the reducer in the background with its stdin and stdout connected to
     # named pipes.
@@ -64,11 +77,13 @@ function test_reducer {
     done
 
     # Clean up the children.
-    kill "$pid" "$sleep_pid"
+    kill "$pid" "$sleep_pid" "$sleep_pid2"
 }
 
 test_preduce_run lorem-ipsum.txt ./predicates/has-lorem.sh
+test_preduce_run nested-classes.cpp ./predicates/class-nine-compiles.sh
 
 test_reducer ../reducers/chunks.py fixtures/lorem-ipsum.txt expectations/chunks-*
+test_reducer ../reducers/lines.py fixtures/lorem-ipsum.txt expectations/lines-*
 
 echo "OK! All tests passed!"

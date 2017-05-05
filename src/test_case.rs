@@ -5,6 +5,7 @@ use error;
 use git::{self, RepoExt};
 use git2;
 use std::fs;
+use std::io;
 use std::path;
 use std::sync::Arc;
 use tempdir;
@@ -274,7 +275,9 @@ impl Interesting {
 
         // Create a new immutable temp file for seeding reducers with the
         // initial test case.
-        let temp_file = TempFile::anonymous()?;
+        let dir = Arc::new(tempdir::TempDir::new("preduce-initial")?);
+        let file_name = path::PathBuf::from(file_path.as_ref().file_name().ok_or(error::Error::Io(io::Error::new(io::ErrorKind::Other, "Initial test case must be a file")))?);
+        let temp_file = TempFile::new(dir, file_name)?;
         fs::copy(file_path.as_ref(), temp_file.path())?;
 
         if !judge.is_interesting(temp_file.path())? {
