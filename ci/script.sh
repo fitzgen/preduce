@@ -3,11 +3,9 @@
 set -eux
 
 case "$JOB" in
-    "build")
-        cargo build $PROFILE --verbose --features "$FEATURES"
-        ;;
     "test")
-        cargo test $PROFILE --verbose --features "$FEATURES"
+        cargo build $PROFILE --verbose --features "$FEATURES"
+        cargo test  $PROFILE --verbose --features "$FEATURES"
         ;;
     "bench")
         if [[ "$PROFILE" != "--release" ]]; then

@@ -14,28 +14,22 @@ addons:
 rust:
   - stable
   - beta
-  - nightly
+  # Rustup + Nightly is broken right now, and I can't figure out how to get
+  # allow_failures to work properly.
+  # - nightly
 
 cache: cargo
 
 env:
   matrix:
-    - JOB="build" PROFILE=""          FEATURES=""
     - JOB="test"  PROFILE=""          FEATURES=""
-    # JOB="bench" PROFILE=""          FEATURES=""
-    - JOB="build" PROFILE="--release" FEATURES=""
     - JOB="test"  PROFILE="--release" FEATURES=""
-    - JOB="bench" PROFILE="--release" FEATURES=""
-    - JOB="build" PROFILE=""          FEATURES="signpost"
+    # JOB="bench" PROFILE="--release" FEATURES=""
     - JOB="test"  PROFILE=""          FEATURES="signpost"
-    # JOB="bench" PROFILE=""          FEATURES="signpost"
-    - JOB="build" PROFILE="--release" FEATURES="signpost"
     - JOB="test"  PROFILE="--release" FEATURES="signpost"
-    - JOB="bench" PROFILE="--release" FEATURES="signpost"
+    # JOB="bench" PROFILE="--release" FEATURES="signpost"
 
 matrix:
   fast_finish: true
-  allow_failures:
-    -rust: nightly
 
 script: ./ci/script.sh
