@@ -99,6 +99,10 @@ test_reducer \
     ../reducers/lines.py \
     fixtures/lorem-ipsum.txt \
     expectations/lines-*
+test_reducer \
+    ../reducers/clang-format.py \
+    fixtures/nested-classes.cpp \
+    expectations/clang-format-0
 
 if [[ "$CI" == "false" ]]; then
     # For some reason this hangs in Travis CI...
