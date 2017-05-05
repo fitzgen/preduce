@@ -5,11 +5,14 @@
 extern crate clap;
 extern crate preduce;
 
+use std::io::{self, Write};
 use std::process;
 
 fn main() {
     if let Err(e) = try_main() {
-        println!("Error: {}", e);
+        let stderr = io::stderr();
+        let mut stderr = stderr.lock();
+        let _ = writeln!(&mut stderr, "Error: {}", e);
         process::exit(1);
     }
 }
