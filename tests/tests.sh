@@ -9,20 +9,22 @@ cd $(dirname $0)
 : ${PROFILE:=""}
 : ${FEATURES:=""}
 
-# Travis CI is a bit over-eager about cleaning up the tempdir.
-if [[ "${CI:=''}" == "true" ]]; then
+: ${CI:="false"}
+
+if [[ "$CI" == "true" ]]; then
     export TMPDIR=$(pwd)
 fi
 
 # Do a full preduce reduction run.
 #
-# Usage: test_preduce_run <fixture-name> <predicate>
+# Usage: test_preduce_run <fixture-name> <predicate> <reducer-1> <reducer-2> ...
 function test_preduce_run {
     fixture=$1
     predicate=$2
+    shift 2
 
     cargo run $PROFILE --features "$FEATURES" -- \
-          "fixtures/$fixture" "$predicate" ../reducers/*.py
+          "fixtures/$fixture" "$predicate" $@
 
     # Ensure that the reduced file is still interesting.
     "$predicate" "fixtures/$fixture"
@@ -80,10 +82,30 @@ function test_reducer {
     kill "$pid" "$sleep_pid" "$sleep_pid2"
 }
 
-test_preduce_run lorem-ipsum.txt ./predicates/has-lorem.sh
-test_preduce_run nested-classes.cpp ./predicates/class-nine-compiles.sh
+test_preduce_run \
+    lorem-ipsum.txt \
+    ./predicates/has-lorem.sh \
+    ../reducers/chunks.py ../reducers/lines.py
+test_preduce_run \
+    nested-classes.cpp \
+    ./predicates/class-nine-compiles.sh \
+    ../reducers/*.py
 
-test_reducer ../reducers/chunks.py fixtures/lorem-ipsum.txt expectations/chunks-*
-test_reducer ../reducers/lines.py fixtures/lorem-ipsum.txt expectations/lines-*
+test_reducer \
+    ../reducers/chunks.py \
+    fixtures/lorem-ipsum.txt \
+    expectations/chunks-*
+test_reducer \
+    ../reducers/lines.py \
+    fixtures/lorem-ipsum.txt \
+    expectations/lines-*
+
+if [[ "$CI" == "false" ]]; then
+    # For some reason this hangs in Travis CI...
+    test_reducer \
+        ../reducers/clex-rename-toks.py \
+        fixtures/nested-classes.cpp \
+        expectations/clex-rename-toks-*
+fi
 
 echo "OK! All tests passed!"

@@ -1,6 +1,8 @@
 sudo: false
-
 language: rust
+
+# To get a new enough ubuntu that has creduce.
+dist: trusty
 
 # libssh2-sys, used by git2, requires a newer cmake than exists on Travis's
 # default setup.
@@ -10,6 +12,7 @@ addons:
       - kalakris-cmake
     packages:
       - cmake
+      - creduce
 
 rust:
   - stable

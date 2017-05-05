@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 
-import os
-import subprocess
 import sys
-import tempfile
 
 if __name__ == "__main__":
+    # Support globbing `$PREDUCE/reducers/*.py` to get a list of reducers.
     sys.exit(0)
+
+import os
+import subprocess
+import tempfile
 
 def num_lines_in_file(path):
     """Return the number of lines in the file at the given path."""
@@ -16,16 +18,25 @@ def num_lines_in_file(path):
             num_lines += 1
     return num_lines
 
-def get_topformflat():
-    """Try to find the `topformflat` program."""
-    possibles = [
-        "/usr/local/libexec/topformflat",
-        "/usr/libexec/topformflat",
-    ]
+def get_executable(possibles):
     for p in possibles:
-        if os.path.isfile(p):
+        if os.path.isfile(p) and os.access(p, os.X_OK):
             return p
     return None
+
+def get_topformflat():
+    """Try to find the `topformflat` program."""
+    return get_executable([
+        "/usr/local/libexec/topformflat",
+        "/usr/libexec/topformflat",
+    ])
+
+def get_clex():
+    """Try to find the `clex` program."""
+    return get_executable([
+        "/usr/local/libexec/clex",
+        "/usr/libexec/clex",
+    ])
 
 def chunk_sizes(min_chunk_size, max_chunk_size):
     """Generate chunk sizes from min_chunk_size to max_chunk_size."""
@@ -83,3 +94,28 @@ def topformflat_reducer(seed, flatten):
             subprocess.check_call([topformflat, str(flatten)], stdin=in_file, stdout=tmp_file)
 
     chunking_reducer(tmp_file.name)
+
+def clex_reducer(seed, clex_command):
+    clex = get_clex()
+    if clex is None:
+        return
+
+    index = 0
+    while True:
+        # Read the file path from stdin.
+        out_file_path = sys.stdin.readline().strip()
+
+        retcode = 0
+        with open(out_file_path, "w") as out_file:
+            retcode = subprocess.call([clex, clex_command, str(index), seed],
+                                      stdout=out_file)
+
+        # I don't know why clex is written with these bizarre exit codes...
+        if retcode != 51:
+            return;
+
+        index += 1
+
+        # Tell `preduce` we generated the reduction.
+        sys.stdout.write("\n")
+        sys.stdout.flush()
