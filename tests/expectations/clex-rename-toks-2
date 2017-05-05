@@ -1,0 +1,14 @@
+template<typename a, typename U, int N>
+class Nine {
+    class Foo {
+        bool b;
+    };
+
+    class Bar {
+        char c;
+    };
+
+    a t;
+    U u;
+    char s[N];
+};
