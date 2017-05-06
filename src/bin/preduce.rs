@@ -79,13 +79,22 @@ fn try_main() -> preduce::error::Result<()> {
     let reducer = match (reducers.next(), reducers.next()) {
         (Some(r), None) => Box::new(preduce::reducers::Script::new(r)?) as Box<preduce::traits::Reducer>,
         (Some(r1), Some(r2)) => {
-            let init = Box::new(preduce::reducers::Chain::new(preduce::reducers::Script::new(r1)?,
-                                                              preduce::reducers::Script::new(r2)?));
+            let r1 = preduce::reducers::Script::new(r1)?;
+            let r1 = preduce::reducers::Fuse::new(r1);
+
+            let r2 = preduce::reducers::Script::new(r2)?;
+            let r2 = preduce::reducers::Fuse::new(r2);
+
+            let init = Box::new(preduce::reducers::Chain::new(r1, r2));
             let init = init as Box<preduce::traits::Reducer>;
+
             let chained: preduce::error::Result<Box<preduce::traits::Reducer>> =
                 reducers.fold(Ok(init), |acc, r| {
                     let acc = acc?;
+
                     let script = preduce::reducers::Script::new(r)?;
+                    let script = preduce::reducers::Fuse::new(script);
+
                     let chained = preduce::reducers::Chain::new(acc, script);
                     Ok(Box::new(chained) as Box<preduce::traits::Reducer>)
                 });
