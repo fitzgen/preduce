@@ -20,9 +20,7 @@ pub trait TestCaseMethods: Into<TempFile> {
     fn size(&self) -> u64;
 
     /// Get the provenance of this test case.
-    fn provenance(&self) -> Option<&str> {
-        None
-    }
+    fn provenance(&self) -> &str;
 }
 
 #[derive(Debug, Clone)]
@@ -150,8 +148,8 @@ impl TestCaseMethods for PotentialReduction {
         self.size
     }
 
-    fn provenance(&self) -> Option<&str> {
-        Some(&self.provenance)
+    fn provenance(&self) -> &str {
+        &self.provenance
     }
 }
 
@@ -254,7 +252,7 @@ impl TestCaseMethods for Interesting {
         self.kind.size()
     }
 
-    fn provenance(&self) -> Option<&str> {
+    fn provenance(&self) -> &str {
         self.kind.provenance()
     }
 }
@@ -339,7 +337,7 @@ impl TestCaseMethods for InterestingKind {
         }
     }
 
-    fn provenance(&self) -> Option<&str> {
+    fn provenance(&self) -> &str {
         match *self {
             InterestingKind::Initial(ref i) => i.provenance(),
             InterestingKind::Reduction(ref r) => r.provenance(),
@@ -367,8 +365,8 @@ impl TestCaseMethods for InitialInteresting {
         self.size
     }
 
-    fn provenance(&self) -> Option<&str> {
-        None
+    fn provenance(&self) -> &str {
+        "<initial>"
     }
 }
 

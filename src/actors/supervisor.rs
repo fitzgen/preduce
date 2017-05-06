@@ -274,7 +274,8 @@ where
             // lose this incremental progress!
             *smallest_interesting = interesting;
             fs::copy(smallest_interesting.path(), &self.opts.test_case)?;
-            self.logger.new_smallest(new_size, orig_size);
+            let provenance = smallest_interesting.provenance().into();
+            self.logger.new_smallest(new_size, orig_size, provenance);
 
             // Second, reset our repo's HEAD to the new interesting test case's
             // commit.
@@ -296,8 +297,8 @@ where
             // interesting test case and see if that is also interesting and
             // even smaller. Unless it is already a merge, in which case, we
             // abandon this thread of traversal.
-            self.logger.is_not_smaller();
-            if !self.opts.should_try_merging() || interesting.provenance() == Some("merge") {
+            self.logger.is_not_smaller(interesting.provenance().into());
+            if !self.opts.should_try_merging() || interesting.provenance() == "merge" {
                 self.send_next_reduction_to(who)?;
             } else {
                 who.try_merge(old_size, self.repo.head_id()?);
