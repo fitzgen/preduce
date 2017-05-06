@@ -3,3 +3,4 @@ tests/fixtures/*.orig
 *.pyc
 *.gch
 *.o
+*.log
