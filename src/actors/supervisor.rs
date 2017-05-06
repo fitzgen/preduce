@@ -123,7 +123,7 @@ where
         let repo = git::TempRepo::new("preduce-supervisor")?;
 
         let num_workers = opts.num_workers();
-        let (logger, logger_handle) = Logger::spawn(io::stdout())?;
+        let (logger, logger_handle) = Logger::spawn(fs::File::create("preduce.log")?)?;
         let mut supervisor = SupervisorActor {
             opts: opts,
             me: me,
