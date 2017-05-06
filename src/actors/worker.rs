@@ -294,6 +294,7 @@ impl Test {
         self.worker
             .logger
             .start_judging_interesting(self.worker.id);
+        let provenance = self.reduction.provenance().into();
         let maybe_interesting = self.reduction
             .into_interesting(&self.worker.predicate, &self.worker.repo)?;
         if let Some(interesting) = maybe_interesting {
@@ -311,7 +312,7 @@ impl Test {
         } else {
             self.worker
                 .logger
-                .judged_not_interesting(self.worker.id);
+                .judged_not_interesting(self.worker.id, provenance);
             Ok(Right(self.worker))
         }
     }
