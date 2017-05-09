@@ -38,6 +38,13 @@ def get_clex():
         "/usr/libexec/clex",
     ])
 
+def get_clang_delta():
+    """Try to find the `clang_delta` program."""
+    return get_executable([
+        "/usr/local/libexec/clang_delta",
+        "/usr/libexec/clang_delta",
+    ])
+
 def chunk_sizes(min_chunk_size, max_chunk_size):
     """Generate chunk sizes from min_chunk_size to max_chunk_size."""
     chunk_size = max_chunk_size
@@ -119,3 +126,33 @@ def clex_reducer(seed, clex_command):
         # Tell `preduce` we generated the reduction.
         sys.stdout.write("\n")
         sys.stdout.flush()
+
+def clang_delta_reducer(seed, transformation):
+    clang_delta = get_clang_delta()
+    if clang_delta is None:
+        return
+
+    index = 1
+    while True:
+        # Read the file path from stdin.
+        out_file_path = sys.stdin.readline().strip()
+
+        retcode = None
+        with open(out_file_path, "w") as out_file:
+            retcode = subprocess.call([clang_delta,
+                                       "--transformation={}".format(transformation),
+                                       "--counter={}".format(str(index)),
+                                       seed],
+                                      stdout=out_file)
+
+        if retcode == 0:
+            # Tell `preduce` we generated the reduction.
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+            index += 1
+            continue
+        elif retcode == 255 or retcode == 1:
+            return
+        else:
+            raise Exception("Unknown return code from clang_delta: {}".format(str(retcode)))

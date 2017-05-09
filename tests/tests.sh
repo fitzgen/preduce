@@ -103,6 +103,14 @@ test_reducer \
     ../reducers/clang-format.py \
     fixtures/nested-classes.cpp \
     expectations/clang-format-0
+test_reducer \
+    ../reducers/clang-delta-reduce-class-template-param.py \
+    fixtures/nested-classes.cpp \
+    expectations/clang-delta-reduce-class-template-param-0
+test_reducer \
+    ../reducers/clang-delta-remove-unused-outer-class.py \
+    fixtures/wow.cpp \
+    expectations/clang-delta-remove-unused-outer-class-0
 
 if [[ "$CI" == "false" ]]; then
     # For some reason this hangs in Travis CI...
