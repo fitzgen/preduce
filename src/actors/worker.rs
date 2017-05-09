@@ -8,6 +8,7 @@ use git::{self, RepoExt};
 use git2;
 use signposts;
 use std::fmt;
+use std::fs;
 use std::panic;
 use std::path;
 use std::sync::mpsc;
@@ -288,32 +289,38 @@ impl WorkerActor {
 }
 
 impl Test {
-    fn judge(self) -> error::Result<Either<Interesting, WorkerActor>> {
-        let _signpost = signposts::WorkerJudgeInteresting::new();
+    chained! {
+        "worker could not judge interesting-ness of a test case",
+        fn judge(self) -> error::Result<Either<Interesting, WorkerActor>> {
+            let _signpost = signposts::WorkerJudgeInteresting::new();
 
-        self.worker
-            .logger
-            .start_judging_interesting(self.worker.id);
-        let provenance = self.reduction.provenance().into();
-        let maybe_interesting = self.reduction
-            .into_interesting(&self.worker.predicate, &self.worker.repo)?;
-        if let Some(interesting) = maybe_interesting {
             self.worker
                 .logger
-                .judged_interesting(self.worker.id, interesting.size());
-            Ok(
-                Left(
-                    Interesting {
-                        worker: self.worker,
-                        interesting: interesting
-                    }
+                .start_judging_interesting(self.worker.id);
+
+            self.worker.repo.fetch_origin_and_checkout(self.reduction.parent())?;
+
+            let provenance = self.reduction.provenance().into();
+            let maybe_interesting = self.reduction
+                .into_interesting(&self.worker.predicate, &self.worker.repo)?;
+            if let Some(interesting) = maybe_interesting {
+                self.worker
+                    .logger
+                    .judged_interesting(self.worker.id, interesting.size());
+                Ok(
+                    Left(
+                        Interesting {
+                            worker: self.worker,
+                            interesting: interesting
+                        }
+                    )
                 )
-            )
-        } else {
-            self.worker
-                .logger
-                .judged_not_interesting(self.worker.id, provenance);
-            Ok(Right(self.worker))
+            } else {
+                self.worker
+                    .logger
+                    .judged_not_interesting(self.worker.id, provenance);
+                Ok(Right(self.worker))
+            }
         }
     }
 }
@@ -361,64 +368,99 @@ impl Interesting {
 }
 
 impl TryMerge {
-    fn into_test(self) -> error::Result<Option<Test>> {
-        // Should split this out into `into_merged_test`, call that new function
-        // here, and then inspect its errors for merge failures and recover from
-        // them gracefully? Right now, if there is a merge conflict, we will
-        // kill the whole worker and rely on the supervisor to spawn a new one
-        // in its stead, which seems fairly heavy for something we expect to
-        // happen fairly often.
+    // Try and merge the commit that the supervisor gave us with our repo's
+    // HEAD.
+    chained! {
+        "worker could not merge commits",
+        fn try_merge(&self) -> error::Result<Option<test_case::PotentialReduction>> {
+            if self.worker.repo.find_commit(self.commit_id).is_ok() {
+                // If we already have the supervisor's smallest interesting
+                // commit before fetching the supervisor's repository, then
+                // there is no point in merging because the commit is already in
+                // our history.
+                return Ok(None);
+            }
 
+            let our_commit = self.worker.repo.head_commit()?;
+            self.worker.repo.fetch_origin()?;
+            let their_commit = self.worker.repo.find_commit(self.commit_id)?;
+
+            let mut index = self.worker
+                .repo
+                .merge_commits(&our_commit, &their_commit, None)?;
+
+            if index.has_conflicts() {
+                return Ok(None);
+            }
+
+            let msg = format!("merge - TODO - TODO"); //, merged.size(), merged.path().display());
+            let tree_id = index.write_tree_to(&self.worker.repo)?;
+
+            let tree = self.worker.repo.find_tree(tree_id)?;
+            let sig = git::signature();
+            let parents = [&our_commit, &their_commit];
+            self.worker
+                .repo
+                .commit(Some("HEAD"), &sig, &sig, &msg, &tree, &parents[..])?;
+            self.worker.repo.checkout_index(Some(&mut index),
+                                            Some(git2::build::CheckoutBuilder::new().force()))?;
+
+            let merged_test_case = test_case::TempFile::anonymous()?;
+            fs::copy(self.worker.repo.test_case_path()?, merged_test_case.path())?;
+
+            Ok(
+                Some(
+                    test_case::PotentialReduction::new(
+                        self.interesting.clone(),
+                        "merge",
+                        merged_test_case
+                    )?
+                )
+            )
+        }
+    }
+
+    fn into_test(self) -> error::Result<Option<Test>> {
         let _signpost = signposts::WorkerTryMerging::new();
 
         self.worker
             .logger
             .try_merging(self.worker.id, self.commit_id, self.interesting.commit_id());
 
-        let merged;
-        {
-            let our_commit = self.worker.repo.head_commit()?;
-
-            self.worker.repo.fetch_origin()?;
-            let their_commit = self.worker.repo.find_commit(self.commit_id)?;
-
+        if let Some(merged) = self.try_merge()? {
             self.worker
-                .repo
-                .merge_commits(&our_commit, &their_commit, None)?;
+                .logger
+                .finished_merging(self.worker.id, merged.size(), self.upstream_size);
 
-            merged = test_case::PotentialReduction::new(
-                self.interesting.clone(),
-                "merge",
-                self.interesting
-            )?;
+            if merged.size() < self.upstream_size {
+                return Ok(
+                    Some(
+                        Test {
+                            worker: self.worker,
+                            reduction: merged
+                        }
+                    )
+                );
+            }
 
-            let msg = format!("merge - {} - {}", merged.size(), merged.path().display());
-            self.worker.repo.commit_test_case(&msg)?;
+            // Fall through...
         }
 
         self.worker
             .logger
-            .finished_merging(self.worker.id, merged.size(), self.upstream_size);
+            .finished_merging(self.worker.id, self.interesting.size(), self.upstream_size);
 
-        if merged.size() < self.upstream_size {
-            Ok(
-                Some(
-                    Test {
-                        worker: self.worker,
-                        reduction: merged
-                    }
-                )
-            )
-        } else {
-            {
-                let object = self.worker
-                    .repo
-                    .find_object(self.commit_id, Some(git2::ObjectType::Commit))?;
-                self.worker
-                    .repo
-                    .reset(&object, git2::ResetType::Hard, None)?;
-            }
-            Ok(self.worker.get_next_reduction())
+        {
+            // Clean up the repo's state.
+            let object = self.worker
+                .repo
+                .find_object(self.commit_id, Some(git2::ObjectType::Commit))?;
+            self.worker
+                .repo
+                .reset(&object, git2::ResetType::Hard, None)?;
+            assert_eq!(self.worker.repo.state(), git2::RepositoryState::Clean);
         }
+
+        Ok(self.worker.get_next_reduction())
     }
 }

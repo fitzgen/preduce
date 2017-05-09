@@ -17,8 +17,10 @@ extern crate git2;
 extern crate tempdir;
 extern crate num_cpus;
 
-mod actors;
+#[macro_use]
 pub mod error;
+
+mod actors;
 mod git;
 pub mod interesting;
 pub mod reducers;

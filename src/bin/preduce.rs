@@ -102,6 +102,8 @@ fn try_main() -> preduce::error::Result<()> {
         }
         _ => unreachable!(),
     };
+    let reducer = preduce::reducers::LazilyReseed::new(reducer);
+    let reducer = preduce::reducers::Shuffle::new(100, reducer);
 
     let test_case = args.value_of("test-case").unwrap();
 

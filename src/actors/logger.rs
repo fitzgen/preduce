@@ -315,6 +315,10 @@ impl Logger {
         for log_msg in incoming {
             writeln!(&mut to, "{}", log_msg).expect("Should write to log file");
 
+            if let LoggerMessage::WorkerErrored(who, ref e) = log_msg {
+                println!("ERROR: {:?}: {}", who, e);
+            }
+
             match log_msg {
                 LoggerMessage::NewSmallest(new_size, orig_size, provenance) => {
                     println!(

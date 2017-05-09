@@ -41,10 +41,14 @@ pub trait RepoExt {
     /// Fetch the origin remote.
     fn fetch_origin(&self) -> error::Result<()>;
 
-    /// Fetch the remote and reset this repository to the given commit id.
-    fn fetch_and_reset_hard<P>(&self, remote: P, commit_id: git2::Oid) -> error::Result<()>
-    where
-        P: AsRef<path::Path>;
+    /// Fetch the given anonymous remote and checkout the given commit id.
+    fn fetch_anonymous_remote_and_checkout(&self,
+                                           remote: &path::Path,
+                                           commit_id: git2::Oid)
+                                           -> error::Result<()>;
+
+    /// Fetch the origin remote and then checkout the given commit.
+    fn fetch_origin_and_checkout(&self, commit_id: git2::Oid) -> error::Result<()>;
 }
 
 impl RepoExt for git2::Repository {
@@ -66,16 +70,30 @@ impl RepoExt for git2::Repository {
         Ok(tree)
     }
 
-    fn commit_test_case(&self, msg: &str) -> error::Result<git2::Oid> {
-        let mut index = self.index()?;
-        index.add_path(path::Path::new(TEST_CASE_FILE_NAME))?;
+    chained! {
+        "could not commit test case",
+        fn commit_test_case(&self, msg: &str) -> error::Result<git2::Oid> {
+            assert_eq!(self.state(), git2::RepositoryState::Clean);
 
-        let sig = signature();
-        let head = self.head_commit()?;
-        let tree = self.head_tree()?;
-        let parents = [&head];
-        let commit_id = self.commit(Some("HEAD"), &sig, &sig, msg, &tree, &parents[..])?;
-        Ok(commit_id)
+            let mut index = self.index()?;
+            index.add_path(path::Path::new(TEST_CASE_FILE_NAME))?;
+            assert!(!index.has_conflicts());
+
+            let tree_id = index.write_tree()?;
+            let tree = self.find_tree(tree_id)?;
+
+            let sig = signature();
+            let head = self.head_commit()?;
+            let parents = [&head];
+            let commit_id = self.commit(Some("HEAD"), &sig, &sig, msg, &tree, &parents[..])?;
+            assert!(!self.index()?.has_conflicts());
+
+            self.checkout_index(Some(&mut index),
+                                Some(git2::build::CheckoutBuilder::new().force()))?;
+
+            assert_eq!(self.state(), git2::RepositoryState::Clean);
+            Ok(commit_id)
+        }
     }
 
     fn test_case_path(&self) -> error::Result<path::PathBuf> {
@@ -88,23 +106,56 @@ impl RepoExt for git2::Repository {
         )
     }
 
-    fn fetch_origin(&self) -> error::Result<()> {
-        let mut origin = self.find_remote("origin")?;
-        origin.fetch(&["master"], None, None)?;
-        Ok(())
+    chained! {
+        "could not fetch origin",
+        fn fetch_origin(&self) -> error::Result<()> {
+            assert_eq!(self.state(), git2::RepositoryState::Clean);
+
+            let mut origin = self.find_remote("origin")?;
+            let refspecs: Vec<_> = origin.refspecs()
+                .filter_map(|r| r.str().map(|s| String::from(s)))
+                .collect();
+            let refspecs: Vec<_> = refspecs.iter().map(|s| s.as_str()).collect();
+            origin.fetch(&refspecs[..], None, None)?;
+            Ok(())
+        }
     }
 
-    fn fetch_and_reset_hard<P>(&self, remote: P, commit_id: git2::Oid) -> error::Result<()>
-    where
-        P: AsRef<path::Path>,
-    {
-        let remote = remote.as_ref();
-        let remote = remote.to_string_lossy();
-        let mut remote = self.remote_anonymous(&remote)?;
-        remote.fetch(&["master"], None, None)?;
-        let object = self.find_object(commit_id, Some(git2::ObjectType::Commit))?;
-        self.reset(&object, git2::ResetType::Hard, None)?;
-        Ok(())
+    chained! {
+        "could not fetch anonymous remote and checkout commit",
+        fn fetch_anonymous_remote_and_checkout(&self,
+                                               remote: &path::Path,
+                                               commit_id: git2::Oid)
+                                               -> error::Result<()> {
+            assert_eq!(self.state(), git2::RepositoryState::Clean);
+
+            let remote = remote.to_string_lossy();
+            let mut remote = self.remote_anonymous(&remote)?;
+
+            let refspecs: Vec<_> = remote.refspecs()
+                .filter_map(|r| r.str().map(|s| String::from(s)))
+                .collect();
+            let refspecs: Vec<_> = refspecs.iter().map(|s| s.as_str()).collect();
+            remote.fetch(&refspecs[..], None, None)?;
+
+            let object = self.find_object(commit_id, Some(git2::ObjectType::Commit))?;
+            self.reset(&object,
+                       git2::ResetType::Hard,
+                       Some(git2::build::CheckoutBuilder::new().force()))?;
+            Ok(())
+        }
+    }
+
+    chained! {
+        "could not fetch origin and checkout commit",
+        fn fetch_origin_and_checkout(&self, commit_id: git2::Oid) -> error::Result<()> {
+            self.fetch_origin()?;
+            let object = self.find_object(commit_id, Some(git2::ObjectType::Commit))?;
+            self.reset(&object,
+                       git2::ResetType::Hard,
+                       Some(git2::build::CheckoutBuilder::new().force()))?;
+            Ok(())
+        }
     }
 }
 
@@ -150,7 +201,14 @@ impl TempRepo {
             let tree = repo.find_tree(tree)?;
 
             let sig = signature();
-            repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])?;
+            repo.commit(Some("HEAD"),
+                        &sig,
+                        &sig,
+                        "Initial commit with empty test case",
+                        &tree,
+                        &[])?;
+            repo.checkout_index(Some(&mut index),
+                                Some(git2::build::CheckoutBuilder::new().force()))?;
         }
 
         Ok(

@@ -189,6 +189,11 @@ impl PotentialReduction {
         )
     }
 
+    /// TODO FITZGEN
+    pub fn parent(&self) -> git2::Oid {
+        self.parent
+    }
+
     fn make_commit_message(&self) -> String {
         format!(
             "{} - {} - {}",
@@ -287,7 +292,7 @@ impl Interesting {
         // Copy to the repository's test case path and make a commit.
         let repo_test_case_path = repo.test_case_path()?;
         fs::copy(file_path.as_ref(), &repo_test_case_path)?;
-        let msg = format!("Initial - {} - {}", size, temp_file.path().display());
+        let msg = format!("Initial test case - {} - {}", size, temp_file.path().display());
         let commit_id = repo.commit_test_case(&msg)?;
 
         Ok(

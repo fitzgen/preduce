@@ -279,8 +279,18 @@ where
 
             // Second, reset our repo's HEAD to the new interesting test case's
             // commit.
-            self.repo
-                .fetch_and_reset_hard(downstream, smallest_interesting.commit_id())?;
+            {
+                let mut tag_name = String::from("tag-");
+                let counter = self.worker_id_counter.to_string();
+                self.worker_id_counter += 1;
+                tag_name.push_str(&counter);
+                let head = self.repo.head_commit()?;
+                self.repo.branch(&tag_name, &head, false)?;
+                self.repo
+                    .fetch_anonymous_remote_and_checkout(&downstream,
+                                                         smallest_interesting.commit_id())?;
+                assert!(self.repo.find_commit(smallest_interesting.commit_id()).is_ok());
+            }
 
             // Third, re-seed our reducer with the new test case, send new work
             // to the reporting worker, and respawn any workers that might have
@@ -298,10 +308,10 @@ where
             // even smaller. Unless it is already a merge, in which case, we
             // abandon this thread of traversal.
             self.logger.is_not_smaller(interesting.provenance().into());
-            if !self.opts.should_try_merging() || interesting.provenance() == "merge" {
-                self.send_next_reduction_to(who)?;
-            } else {
+            if self.opts.should_try_merging() {
                 who.try_merge(old_size, self.repo.head_id()?);
+            } else {
+                self.send_next_reduction_to(who)?;
             }
         }
 

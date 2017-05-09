@@ -10,6 +10,9 @@ use std::path;
 /// The kinds of errors that can happen when running `preduce`.
 #[derive(Debug)]
 pub enum Error {
+    /// A chained diagnostic message and underlying error.
+    Chained(&'static str, Box<Error>),
+
     /// A git error.
     Git(git2::Error),
 
@@ -35,6 +38,9 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error> {
         match *self {
+            Error::Chained(msg, ref e) => {
+                write!(f, "{}: {}", msg, e)
+            }
             Error::Git(ref e) => fmt::Display::fmt(e, f),
             Error::Io(ref e) => fmt::Display::fmt(e, f),
             Error::Thread(ref e) => write!(f, "Thread panicked: {:?}", e),
@@ -58,8 +64,23 @@ impl fmt::Display for Error {
 }
 
 impl error::Error for Error {
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            Error::Chained(_, ref e) => Some(e),
+            Error::Git(ref e) => Some(e),
+            Error::Io(ref e) => Some(e),
+
+            Error::Thread(_) |
+            Error::MisbehavingReducerScript(_) |
+            Error::TestCaseBackupFailure(_) |
+            Error::InitialTestCaseNotInteresting |
+            Error::DoesNotExist(_) => None
+        }
+    }
+
     fn description(&self) -> &str {
         match *self {
+            Error::Chained(msg, _) => msg,
             Error::Git(ref e) => error::Error::description(e),
             Error::Io(ref e) => error::Error::description(e),
             Error::Thread(_) => "A panicked thread",
@@ -86,6 +107,48 @@ impl From<git2::Error> for Error {
 impl From<Box<Any + Send + 'static>> for Error {
     fn from(e: Box<Any + Send + 'static>) -> Self {
         Error::Thread(e)
+    }
+}
+
+/// Allow chaining custom diagnostic messages onto errors.
+pub trait ChainErr<T> {
+    /// Chain the given message onto this error.
+    fn chain_err(self, msg: &'static str) -> Result<T>;
+}
+
+impl<T, E> ChainErr<T> for ::std::result::Result<T, E>
+    where E: Into<Error>
+{
+    #[inline]
+    fn chain_err(self, msg: &'static str) -> Result<T> {
+        self.map_err(|e| {
+            let e = e.into();
+            Error::Chained(msg, Box::new(e))
+        })
+    }
+}
+
+macro_rules! chained {
+    (
+        $msg:expr ,
+        fn $name:ident ( $( $args:tt )* ) -> $ret:ty {
+            $( $body:tt )*
+        }
+    ) => {
+        fn $name ( $( $args )* ) -> $ret {
+            use error::{self, ChainErr};
+
+            // Required to coerce the closure into `FnOnce` instead of `Fn`.
+            fn once<T, F: FnOnce() -> T>(f: F) -> T {
+                f()
+            }
+
+            let result: error::Result<_> = once(move || {
+                $( $body )*
+            });
+
+            result.chain_err($msg)
+        }
     }
 }
 
