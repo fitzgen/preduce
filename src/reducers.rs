@@ -308,11 +308,15 @@ impl<R> Reducer for LazilyReseed<R>
     where R: Reducer
 {
     fn set_seed(&mut self, seed: test_case::Interesting) {
-        if self.current_seed.is_some() {
-            self.next_seed = Some(seed);
-        } else {
+        if {
+            self.current_seed.is_none() ||
+                seed.size() <= self.current_seed.as_ref().unwrap().size() / 2
+        } {
+            self.next_seed = None;
             self.current_seed = Some(seed.clone());
             self.inner.set_seed(seed);
+        } else {
+            self.next_seed = Some(seed);
         }
     }
 
