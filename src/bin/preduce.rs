@@ -5,6 +5,7 @@
 extern crate clap;
 extern crate preduce;
 
+use preduce::{error, interesting, reducers, traits};
 use std::io::{self, Write};
 use std::process;
 
@@ -57,7 +58,7 @@ fn parse_args() -> clap::ArgMatches<'static> {
                 )
                 .help(
                     "Set the number of parallel workers. Defaults to the number of logical \
-                        CPUs."
+                     CPUs."
                 )
         )
         .arg(
@@ -69,34 +70,34 @@ fn parse_args() -> clap::ArgMatches<'static> {
         .get_matches()
 }
 
-fn try_main() -> preduce::error::Result<()> {
+fn try_main() -> error::Result<()> {
     let args = parse_args();
 
     let predicate = args.value_of("predicate").unwrap();
-    let predicate = preduce::interesting::Script::new(predicate)?;
+    let predicate = interesting::Script::new(predicate)?;
 
     let mut reducers = args.values_of("reducer").unwrap();
     let reducer = match (reducers.next(), reducers.next()) {
-        (Some(r), None) => Box::new(preduce::reducers::Script::new(r)?) as Box<preduce::traits::Reducer>,
+        (Some(r), None) => Box::new(reducers::Script::new(r)?) as Box<traits::Reducer>,
         (Some(r1), Some(r2)) => {
-            let r1 = preduce::reducers::Script::new(r1)?;
-            let r1 = preduce::reducers::Fuse::new(r1);
+            let r1 = reducers::Script::new(r1)?;
+            let r1 = reducers::Fuse::new(r1);
 
-            let r2 = preduce::reducers::Script::new(r2)?;
-            let r2 = preduce::reducers::Fuse::new(r2);
+            let r2 = reducers::Script::new(r2)?;
+            let r2 = reducers::Fuse::new(r2);
 
-            let init = Box::new(preduce::reducers::Chain::new(r1, r2));
-            let init = init as Box<preduce::traits::Reducer>;
+            let init = Box::new(reducers::Chain::new(r1, r2));
+            let init = init as Box<traits::Reducer>;
 
-            let chained: preduce::error::Result<Box<preduce::traits::Reducer>> =
+            let chained: error::Result<Box<traits::Reducer>> =
                 reducers.fold(Ok(init), |acc, r| {
                     let acc = acc?;
 
-                    let script = preduce::reducers::Script::new(r)?;
-                    let script = preduce::reducers::Fuse::new(script);
+                    let script = reducers::Script::new(r)?;
+                    let script = reducers::Fuse::new(script);
 
-                    let chained = preduce::reducers::Chain::new(acc, script);
-                    Ok(Box::new(chained) as Box<preduce::traits::Reducer>)
+                    let chained = reducers::Chain::new(acc, script);
+                    Ok(Box::new(chained) as Box<traits::Reducer>)
                 });
             chained?
         }
