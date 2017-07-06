@@ -103,6 +103,7 @@ fn try_main() -> error::Result<()> {
         }
         _ => unreachable!(),
     };
+    let reducer = reducers::LazilyReseed::new(reducer);
 
     let test_case = args.value_of("test-case").unwrap();
 
