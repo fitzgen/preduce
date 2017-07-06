@@ -13,6 +13,7 @@ addons:
     packages:
       - cmake
       - creduce
+      - clang-format-3.8
 
 rust:
   - stable
