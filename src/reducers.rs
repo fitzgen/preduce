@@ -287,7 +287,7 @@ pub struct LazilyReseed<R>
     where R: Reducer
 {
     inner: R,
-    inner_is_seeded: bool,
+    current_seed: Option<test_case::Interesting>,
     next_seed: Option<test_case::Interesting>,
 }
 
@@ -298,7 +298,7 @@ impl<R> LazilyReseed<R>
     pub fn new(inner: R) -> LazilyReseed<R> {
         LazilyReseed {
             inner: inner,
-            inner_is_seeded: false,
+            current_seed: None,
             next_seed: None,
         }
     }
@@ -308,11 +308,11 @@ impl<R> Reducer for LazilyReseed<R>
     where R: Reducer
 {
     fn set_seed(&mut self, seed: test_case::Interesting) {
-        if self.inner_is_seeded {
+        if self.current_seed.is_some() {
             self.next_seed = Some(seed);
         } else {
+            self.current_seed = Some(seed.clone());
             self.inner.set_seed(seed);
-            self.inner_is_seeded = true;
         }
     }
 
@@ -321,26 +321,25 @@ impl<R> Reducer for LazilyReseed<R>
         match self.inner.next_potential_reduction() {
             next @ Ok(Some(_)) => next,
             Ok(None) => {
+                self.current_seed = None;
                 if let Some(next_seed) = self.next_seed.take() {
+                    self.current_seed = Some(next_seed.clone());
                     self.inner.set_seed(next_seed);
-                    self.inner_is_seeded = true;
 
                     self.inner.next_potential_reduction()
                 } else {
-                    self.inner_is_seeded = false;
                     Ok(None)
                 }
             }
             err @ Err(_) => {
+                self.current_seed = None;
                 if let Some(next_seed) = self.next_seed.take() {
                     // It might not error out with the new seed, so reseed the
                     // inner reducer. Do not, however, retry getting the next
                     // potential reduction. That would silently swallow the
                     // error, which we don't want to do.
+                    self.current_seed = Some(next_seed.clone());
                     self.inner.set_seed(next_seed);
-                    self.inner_is_seeded = true;
-                } else {
-                    self.inner_is_seeded = false;
                 }
 
                 err
