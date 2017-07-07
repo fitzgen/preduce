@@ -29,6 +29,7 @@ pub mod traits;
 #[cfg(test)]
 mod test_utils;
 
+use std::mem;
 use std::path;
 
 /// A builder to configure a `preduce` run's options, and finally start the
@@ -41,7 +42,7 @@ use std::path;
 /// let test_case = "path/to/test-case";
 ///
 /// // Construct the `Options` builder.
-/// preduce::Options::new(predicate, reducer, test_case)
+/// preduce::Options::new(predicate, vec![Box::new(reducer)], test_case)
 ///     // Then configure and tweak various options.
 ///     .workers(12)
 ///     // Finally, kick off the reduction process.
@@ -49,50 +50,59 @@ use std::path;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Clone, Debug)]
-pub struct Options<I, R>
+#[derive(Debug)]
+pub struct Options<I>
 where
     I: traits::IsInteresting,
-    R: traits::Reducer,
 {
     test_case: path::PathBuf,
     is_interesting: I,
-    reducer: R,
+    reducers: Vec<Box<traits::Reducer>>,
     workers: usize,
-    try_merging: bool
+    try_merging: bool,
 }
 
 /// APIs for configuring options and spawning the reduction process.
-impl<I, R> Options<I, R>
+impl<I> Options<I>
 where
     I: 'static + traits::IsInteresting,
-    R: 'static + traits::Reducer,
 {
     /// Construct a new `Options` builder.
     ///
-    /// You must provide the is-interesting predicate, the test case
-    /// reduction generator, and the initial test case.
+    /// You must provide the is-interesting predicate, the test case reduction
+    /// generators, and the initial test case.
+    ///
+    /// ### Panics
+    ///
+    /// This function panics if the `reducers` vec is empty.
+    ///
+    /// ### Example
     ///
     /// ```
     /// # fn _ignore() -> preduce::error::Result<()> {
     /// let predicate = preduce::interesting::Script::new("is_interesting.sh")?;
     /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
     ///
-    /// let opts = preduce::Options::new(predicate, reducer, "path/to/test-case");
+    /// let opts = preduce::Options::new(predicate, vec![Box::new(reducer)], "path/to/test-case");
     /// # let _ = opts;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new<P>(is_interesting: I, reducer: R, test_case: P) -> Options<I, reducers::Fuse<R>>
+    pub fn new<P>(
+        is_interesting: I,
+        reducers: Vec<Box<traits::Reducer>>,
+        test_case: P,
+    ) -> Options<I>
     where
         P: Into<path::PathBuf>,
     {
+        assert!(!reducers.is_empty());
         Options {
             test_case: test_case.into(),
             is_interesting: is_interesting,
-            reducer: reducers::Fuse::new(reducer),
+            reducers: reducers,
             workers: num_cpus::get(),
-            try_merging: true
+            try_merging: true,
         }
     }
 
@@ -105,7 +115,7 @@ where
     /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
     /// let test_case = "path/to/test-case";
     ///
-    /// let opts = preduce::Options::new(predicate, reducer, test_case)
+    /// let opts = preduce::Options::new(predicate, vec![Box::new(reducer)], test_case)
     ///     // Only use 4 workers instead of the number-of-logical-CPUs
     ///     // default.
     ///     .workers(4);
@@ -117,7 +127,7 @@ where
     /// ### Panics
     ///
     /// Panics if `num_workers` is zero.
-    pub fn workers(mut self, num_workers: usize) -> Options<I, R> {
+    pub fn workers(mut self, num_workers: usize) -> Options<I> {
         assert!(num_workers != 0);
         self.workers = num_workers;
         self
@@ -135,14 +145,14 @@ where
     /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
     /// let test_case = "path/to/test-case";
     ///
-    /// let opts = preduce::Options::new(predicate, reducer, test_case)
+    /// let opts = preduce::Options::new(predicate, vec![Box::new(reducer)], test_case)
     ///     // Do not try merges.
     ///     .try_merging(false);
     /// # let _ = opts;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn try_merging(mut self, should_try_merging: bool) -> Options<I, R> {
+    pub fn try_merging(mut self, should_try_merging: bool) -> Options<I> {
         self.try_merging = should_try_merging;
         self
     }
@@ -156,7 +166,7 @@ where
     /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
     /// let test_case = "path/to/test-case";
     ///
-    /// preduce::Options::new(predicate, reducer, test_case).run()?;
+    /// preduce::Options::new(predicate, vec![Box::new(reducer)], test_case).run()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -168,10 +178,9 @@ where
 }
 
 /// APIs for accessing the `Options`' configured settings.
-impl<I, R> Options<I, R>
+impl<I> Options<I>
 where
     I: 'static + traits::IsInteresting,
-    R: 'static + traits::Reducer,
 {
     /// Get the number of workers this `Options` is configured to use.
     pub fn num_workers(&self) -> usize {
@@ -189,8 +198,18 @@ where
         &self.is_interesting
     }
 
-    /// Get this `Options`' `Reducer`.
-    pub fn reducer(&mut self) -> &mut R {
-        &mut self.reducer
+    /// Get this `Options`' `Reducer`s.
+    pub fn reducers(&self) -> &[Box<traits::Reducer>] {
+        &self.reducers[..]
+    }
+
+    /// Take ownership of this `Options`' `Reducer`s. Panics if the reducers
+    /// have already been taken.
+    pub(crate) fn take_reducers(&mut self) -> Vec<Box<traits::Reducer>> {
+        assert!(
+            !self.reducers.is_empty(),
+            "should not have already taken the reducers"
+        );
+        mem::replace(&mut self.reducers, vec![])
     }
 }

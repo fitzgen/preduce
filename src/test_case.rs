@@ -31,7 +31,7 @@ struct TempFileInner {
     /// The temporary directory that this test case file is within.
     ///
     /// Invariant: the `file_path` is always contained within this `dir`!
-    dir: Arc<tempdir::TempDir>
+    dir: Arc<tempdir::TempDir>,
 }
 
 /// An immutable, temporary file within a temporary directory.
@@ -50,7 +50,7 @@ struct TempFileInner {
 /// dealing with a DAG, and therefore don't have to worry about leaking cycles.
 #[derive(Debug, Clone)]
 pub struct TempFile {
-    inner: Arc<TempFileInner>
+    inner: Arc<TempFileInner>,
 }
 
 impl TempFile {
@@ -69,16 +69,12 @@ impl TempFile {
         );
 
         let file_path = dir.path().canonicalize()?.join(file_path);
-        Ok(
-            TempFile {
-                inner: Arc::new(
-                    TempFileInner {
-                        file_path: file_path,
-                        dir: dir
-                    }
-                )
-            }
-        )
+        Ok(TempFile {
+            inner: Arc::new(TempFileInner {
+                file_path: file_path,
+                dir: dir,
+            }),
+        })
     }
 
     /// Create a new anonymous temporary file in a new temporary directory.
@@ -136,7 +132,7 @@ pub struct PotentialReduction {
     test_case: TempFile,
 
     /// The size of the test case file, in bytes.
-    size: u64
+    size: u64,
 }
 
 impl TestCaseMethods for PotentialReduction {
@@ -179,14 +175,12 @@ impl PotentialReduction {
         let test_case = test_case.into();
         let size = fs::metadata(test_case.path())?.len();
 
-        Ok(
-            PotentialReduction {
-                provenance: provenance,
-                parent: seed.commit_id(),
-                test_case: test_case,
-                size: size
-            }
-        )
+        Ok(PotentialReduction {
+            provenance: provenance,
+            parent: seed.commit_id(),
+            test_case: test_case,
+            size: size,
+        })
     }
 
     fn make_commit_message(&self) -> String {
@@ -222,14 +216,10 @@ impl PotentialReduction {
         let msg = self.make_commit_message();
         let commit_id = repo.commit_test_case(&msg)?;
 
-        Ok(
-            Some(
-                Interesting {
-                    kind: InterestingKind::Reduction(self),
-                    commit_id: commit_id
-                }
-            )
-        )
+        Ok(Some(Interesting {
+            kind: InterestingKind::Reduction(self),
+            commit_id: commit_id,
+        }))
     }
 }
 
@@ -240,7 +230,7 @@ pub struct Interesting {
     kind: InterestingKind,
 
     /// The commit id for this test case.
-    commit_id: git2::Oid
+    commit_id: git2::Oid,
 }
 
 impl TestCaseMethods for Interesting {
@@ -274,7 +264,12 @@ impl Interesting {
         // Create a new immutable temp file for seeding reducers with the
         // initial test case.
         let dir = Arc::new(tempdir::TempDir::new("preduce-initial")?);
-        let file_name = path::PathBuf::from(file_path.as_ref().file_name().ok_or(error::Error::Io(io::Error::new(io::ErrorKind::Other, "Initial test case must be a file")))?);
+        let file_name = path::PathBuf::from(file_path.as_ref().file_name().ok_or(
+            error::Error::Io(io::Error::new(
+                io::ErrorKind::Other,
+                "Initial test case must be a file",
+            )),
+        )?);
         let temp_file = TempFile::new(dir, file_name)?;
         fs::copy(file_path.as_ref(), temp_file.path())?;
 
@@ -290,19 +285,13 @@ impl Interesting {
         let msg = format!("Initial - {} - {}", size, temp_file.path().display());
         let commit_id = repo.commit_test_case(&msg)?;
 
-        Ok(
-            Some(
-                Interesting {
-                    kind: InterestingKind::Initial(
-                        InitialInteresting {
-                            test_case: temp_file,
-                            size: size
-                        }
-                    ),
-                    commit_id: commit_id
-                }
-            )
-        )
+        Ok(Some(Interesting {
+            kind: InterestingKind::Initial(InitialInteresting {
+                test_case: temp_file,
+                size: size,
+            }),
+            commit_id: commit_id,
+        }))
     }
 
     /// Get the commit id of this interesting test case.
@@ -319,7 +308,7 @@ enum InterestingKind {
 
     /// A potential reduction of the initial test case that has been found to be
     /// interesting.
-    Reduction(PotentialReduction)
+    Reduction(PotentialReduction),
 }
 
 impl TestCaseMethods for InterestingKind {
@@ -353,7 +342,7 @@ struct InitialInteresting {
     test_case: TempFile,
 
     /// The size of the file.
-    size: u64
+    size: u64,
 }
 
 impl TestCaseMethods for InitialInteresting {
@@ -377,7 +366,7 @@ impl PotentialReduction {
             provenance: "PotentialReduction::testing_only_new".into(),
             parent: git2::Oid::from_bytes(&[0; 20]).unwrap(),
             test_case: TempFile::anonymous().unwrap(),
-            size: 0
+            size: 0,
         }
     }
 }
@@ -386,13 +375,11 @@ impl PotentialReduction {
 impl Interesting {
     pub fn testing_only_new() -> Interesting {
         Interesting {
-            kind: InterestingKind::Initial(
-                InitialInteresting {
-                    test_case: TempFile::anonymous().unwrap(),
-                    size: 0
-                }
-            ),
-            commit_id: git2::Oid::from_bytes(&[0; 20]).unwrap()
+            kind: InterestingKind::Initial(InitialInteresting {
+                test_case: TempFile::anonymous().unwrap(),
+                size: 0,
+            }),
+            commit_id: git2::Oid::from_bytes(&[0; 20]).unwrap(),
         }
     }
 }
@@ -430,8 +417,8 @@ mod tests {
             "The repo path should have a file now"
         );
 
-        let mut file =
-            fs::File::open(&repo_test_case_path).expect("The repo test case file should open");
+        let mut file = fs::File::open(&repo_test_case_path)
+            .expect("The repo test case file should open");
 
         let mut contents = String::new();
         file.read_to_string(&mut contents)

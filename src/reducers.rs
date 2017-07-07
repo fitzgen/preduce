@@ -90,7 +90,7 @@ pub struct Script {
     seed: Option<test_case::Interesting>,
     child: Option<process::Child>,
     child_stdout: Option<process::ChildStdout>,
-    strict: bool
+    strict: bool,
 }
 
 impl Script {
@@ -112,7 +112,7 @@ impl Script {
             seed: None,
             child: None,
             child_stdout: None,
-            strict: false
+            strict: false,
         })
     }
 
@@ -165,26 +165,24 @@ impl Script {
         test_case::TempFile::new(self.out_dir.as_ref().unwrap().clone(), file_path)
     }
 
-    fn next_potential_reduction_impl(&mut self,)
-        -> error::Result<Option<test_case::PotentialReduction>> {
+    fn next_potential_reduction_impl(
+        &mut self,
+    ) -> error::Result<Option<test_case::PotentialReduction>> {
         assert!(self.out_dir.is_some() && self.child.is_some() && self.child_stdout.is_some());
 
-        let temp_file = self.next_temp_file()
-            .or_else(
-                |e| {
-                    self.kill_child();
-                    Err(e)
-                }
-            )?;
+        let temp_file = self.next_temp_file().or_else(|e| {
+            self.kill_child();
+            Err(e)
+        })?;
 
         // Write the desired path of the next reduction to the child's stdin. If
         // this fails, then the child already exited, presumably because it
         // determined it could not generate any reductions from the test file.
         if {
-               let mut child = self.child.as_mut().unwrap();
-               let mut child_stdin = child.stdin.as_mut().unwrap();
-               write!(child_stdin, "{}\n", temp_file.path().display()).is_err()
-           } {
+            let mut child = self.child.as_mut().unwrap();
+            let mut child_stdin = child.stdin.as_mut().unwrap();
+            write!(child_stdin, "{}\n", temp_file.path().display()).is_err()
+        } {
             self.kill_child();
             return Ok(None);
         }
@@ -193,9 +191,9 @@ impl Script {
         // the child has finished generating the reduction.
         let mut newline = [0];
         if {
-               let mut child_stdout = self.child_stdout.as_mut().unwrap();
-               child_stdout.read_exact(&mut newline).is_err()
-           } {
+            let mut child_stdout = self.child_stdout.as_mut().unwrap();
+            child_stdout.read_exact(&mut newline).is_err()
+        } {
             self.kill_child();
             return Ok(None);
         }
@@ -204,7 +202,7 @@ impl Script {
             self.kill_child();
             let details = format!(
                 "'{}' is not conforming to the reducer script protocol: \
-                                   expected a newline response",
+                 expected a newline response",
                 self.program.to_string_lossy()
             );
             return Err(error::Error::MisbehavingReducerScript(details));
@@ -223,7 +221,7 @@ impl Script {
         let reduction = test_case::PotentialReduction::new(
             self.seed.clone().unwrap(),
             self.program.to_string_lossy(),
-            temp_file
+            temp_file,
         )?;
 
         if self.strict {
@@ -264,7 +262,7 @@ impl Reducer for Script {
         assert!(
             self.seed.is_some(),
             "Must be initialized with calls to set_seed before asking for potential \
-                 reductions"
+             reductions"
         );
 
         if self.child.is_none() {
@@ -284,7 +282,8 @@ impl Reducer for Script {
 /// Exhuast the inner reducer's potential reductions before reseeding it.
 #[derive(Debug)]
 pub struct LazilyReseed<R>
-    where R: Reducer
+where
+    R: Reducer,
 {
     inner: R,
     current_seed: Option<test_case::Interesting>,
@@ -292,7 +291,8 @@ pub struct LazilyReseed<R>
 }
 
 impl<R> LazilyReseed<R>
-    where R: Reducer
+where
+    R: Reducer,
 {
     /// Construct a new lazily reseeded reducer.
     pub fn new(inner: R) -> LazilyReseed<R> {
@@ -305,7 +305,8 @@ impl<R> LazilyReseed<R>
 }
 
 impl<R> Reducer for LazilyReseed<R>
-    where R: Reducer
+where
+    R: Reducer,
 {
     fn set_seed(&mut self, seed: test_case::Interesting) {
         if {
@@ -320,8 +321,7 @@ impl<R> Reducer for LazilyReseed<R>
         }
     }
 
-    fn next_potential_reduction(&mut self)
-                                -> error::Result<Option<test_case::PotentialReduction>> {
+    fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
         match self.inner.next_potential_reduction() {
             next @ Ok(Some(_)) => next,
             Ok(None) => {
@@ -389,7 +389,7 @@ impl<R> Reducer for LazilyReseed<R>
 #[derive(Clone, Debug)]
 pub struct Shuffle<R> {
     reducer: R,
-    buffer: Vec<test_case::PotentialReduction>
+    buffer: Vec<test_case::PotentialReduction>,
 }
 
 impl<R> Shuffle<R> {
@@ -399,7 +399,7 @@ impl<R> Shuffle<R> {
         assert!(capacity > 0);
         Shuffle {
             reducer: reducer,
-            buffer: Vec::with_capacity(capacity)
+            buffer: Vec::with_capacity(capacity),
         }
     }
 }
@@ -441,7 +441,7 @@ enum ChainState {
     Second,
 
     /// We exhausted both reducers.
-    Done
+    Done,
 }
 
 /// Generate reductions from `T`, followed by reductions from `U`.
@@ -475,7 +475,7 @@ enum ChainState {
 pub struct Chain<T, U> {
     first: T,
     second: U,
-    state: ChainState
+    state: ChainState,
 }
 
 impl<T, U> Chain<T, U> {
@@ -484,7 +484,7 @@ impl<T, U> Chain<T, U> {
         Chain {
             first: first,
             second: second,
-            state: ChainState::First
+            state: ChainState::First,
         }
     }
 }
@@ -563,7 +563,7 @@ where
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Fuse<R> {
     reducer: R,
-    finished: bool
+    finished: bool,
 }
 
 impl<R> Fuse<R> {
@@ -572,7 +572,7 @@ impl<R> Fuse<R> {
     pub fn new(reducer: R) -> Fuse<R> {
         Fuse {
             reducer: reducer,
-            finished: false
+            finished: false,
         }
     }
 }
@@ -710,8 +710,9 @@ mod tests {
         impl Reducer for Erratic {
             fn set_seed(&mut self, _: test_case::Interesting) {}
 
-            fn next_potential_reduction(&mut self,)
-                -> error::Result<Option<test_case::PotentialReduction>> {
+            fn next_potential_reduction(
+                &mut self,
+            ) -> error::Result<Option<test_case::PotentialReduction>> {
                 let result = match self.0 % 3 {
                     0 => Ok(Some(test_case::PotentialReduction::testing_only_new())),
                     1 => Ok(None),

@@ -19,6 +19,10 @@ pub enum Error {
     /// A panicked thread's failure value.
     Thread(Box<Any + Send + 'static>),
 
+    /// An unexpected panic occurred in a reducer actor. This should be
+    /// recoverable, but is not at the moment.
+    ReducerActorPanicked,
+
     /// An error related to a misbehaving reducer script.
     MisbehavingReducerScript(String),
 
@@ -38,6 +42,7 @@ impl fmt::Display for Error {
             Error::Git(ref e) => fmt::Display::fmt(e, f),
             Error::Io(ref e) => fmt::Display::fmt(e, f),
             Error::Thread(ref e) => write!(f, "Thread panicked: {:?}", e),
+            Error::ReducerActorPanicked => write!(f, "A reducer actor panicked"),
             Error::MisbehavingReducerScript(ref details) => {
                 write!(f, "Misbehaving reducer script: {}", details)
             }
@@ -63,9 +68,12 @@ impl error::Error for Error {
             Error::Git(ref e) => error::Error::description(e),
             Error::Io(ref e) => error::Error::description(e),
             Error::Thread(_) => "A panicked thread",
+            Error::ReducerActorPanicked => "A reducer actor panicked",
             Error::MisbehavingReducerScript(_) => "Misbehaving reducer script",
             Error::TestCaseBackupFailure(_) => "Could not backup initial test case",
-            Error::InitialTestCaseNotInteresting => "The initial test case did not pass the is-interesting predicate",
+            Error::InitialTestCaseNotInteresting => {
+                "The initial test case did not pass the is-interesting predicate"
+            }
             Error::DoesNotExist(_) => "There is no file at the given path, but we expected one",
         }
     }
