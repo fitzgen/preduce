@@ -52,7 +52,9 @@ impl RepoExt for git2::Repository {
         self.find_reference("HEAD")?
             .resolve()?
             .target()
-            .ok_or_else(|| git2::Error::from_str("HEAD reference has no target Oid").into())
+            .ok_or_else(|| {
+                git2::Error::from_str("HEAD reference has no target Oid").into()
+            })
     }
 
     fn head_commit(&self) -> error::Result<git2::Commit> {
@@ -84,7 +86,7 @@ impl RepoExt for git2::Repository {
                 .canonicalize()?
                 .parent()
                 .expect(".git/ folder should always be within the root of the repo")
-                .join(TEST_CASE_FILE_NAME)
+                .join(TEST_CASE_FILE_NAME),
         )
     }
 
@@ -113,7 +115,7 @@ pub struct TempRepo {
     // Only an `Option` so we can force its destruction before the temp dir
     // disappears under its feet.
     repo: Option<git2::Repository>,
-    _dir: Arc<tempdir::TempDir>
+    _dir: Arc<tempdir::TempDir>,
 }
 
 impl fmt::Debug for TempRepo {
@@ -153,12 +155,10 @@ impl TempRepo {
             repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])?;
         }
 
-        Ok(
-            TempRepo {
-                repo: Some(repo),
-                _dir: dir
-            }
-        )
+        Ok(TempRepo {
+            repo: Some(repo),
+            _dir: dir,
+        })
     }
 
     /// Create a temporary clone repository of a local upstream git repository.
@@ -169,12 +169,10 @@ impl TempRepo {
         let upstream = upstream.as_ref().to_string_lossy();
         let dir = Arc::new(tempdir::TempDir::new(prefix)?);
         let repo = git2::Repository::clone(&upstream, dir.path())?;
-        Ok(
-            TempRepo {
-                repo: Some(repo),
-                _dir: dir
-            }
-        )
+        Ok(TempRepo {
+            repo: Some(repo),
+            _dir: dir,
+        })
     }
 }
 

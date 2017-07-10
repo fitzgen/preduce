@@ -115,7 +115,10 @@ impl IsInteresting for Script {
             .stderr(process::Stdio::null())
             .stdin(process::Stdio::null());
 
-        match (potential_reduction.parent(), potential_reduction.file_name()) {
+        match (
+            potential_reduction.parent(),
+            potential_reduction.file_name(),
+        ) {
             (Some(dir), Some(file)) => {
                 cmd.current_dir(dir).arg(file);
             }
@@ -166,7 +169,7 @@ impl IsInteresting for Script {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct And<T, U> {
     first: T,
-    second: U
+    second: U,
 }
 
 impl<T, U> And<T, U> {
@@ -174,7 +177,7 @@ impl<T, U> And<T, U> {
     pub fn new(first: T, second: U) -> And<T, U> {
         And {
             first: first,
-            second: second
+            second: second,
         }
     }
 }
@@ -187,7 +190,7 @@ where
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
         Ok(
             self.first.is_interesting(potential_reduction)? &&
-            self.second.is_interesting(potential_reduction)?
+                self.second.is_interesting(potential_reduction)?,
         )
     }
 
@@ -229,7 +232,7 @@ where
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Or<T, U> {
     first: T,
-    second: U
+    second: U,
 }
 
 impl<T, U> Or<T, U> {
@@ -237,7 +240,7 @@ impl<T, U> Or<T, U> {
     pub fn new(first: T, second: U) -> Or<T, U> {
         Or {
             first: first,
-            second: second
+            second: second,
         }
     }
 }
@@ -250,7 +253,7 @@ where
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
         Ok(
             self.first.is_interesting(potential_reduction)? ||
-            self.second.is_interesting(potential_reduction)?
+                self.second.is_interesting(potential_reduction)?,
         )
     }
 
@@ -263,14 +266,16 @@ where
 }
 
 impl<T> IsInteresting for T
-    where T: Clone + Send + UnwindSafe + for<'a> Fn(&'a path::Path) -> error::Result<bool>
+where
+    T: Clone + Send + UnwindSafe + for<'a> Fn(&'a path::Path) -> error::Result<bool>,
 {
     fn is_interesting(&self, reduction: &path::Path) -> error::Result<bool> {
         (*self)(reduction)
     }
 
     fn clone(&self) -> Box<IsInteresting>
-        where Self: 'static
+    where
+        Self: 'static,
     {
         Box::new(self.clone()) as _
     }
@@ -325,7 +330,10 @@ mod tests {
 
     #[test]
     fn and_both_true() {
-        let test = And::new(Script::new(get_exit_0()).unwrap(), Script::new(get_exit_0()).unwrap());
+        let test = And::new(
+            Script::new(get_exit_0()).unwrap(),
+            Script::new(get_exit_0()).unwrap(),
+        );
         let test_case = temp_file();
         assert!(
             test.is_interesting(test_case.path())
@@ -335,28 +343,40 @@ mod tests {
 
     #[test]
     fn and_one_false() {
-        let test = And::new(Script::new(get_exit_0()).unwrap(), Script::new(get_exit_1()).unwrap());
+        let test = And::new(
+            Script::new(get_exit_0()).unwrap(),
+            Script::new(get_exit_1()).unwrap(),
+        );
         let test_case = temp_file();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_first_true() {
-        let test = Or::new(Script::new(get_exit_0()).unwrap(), Script::new(get_exit_1()).unwrap());
+        let test = Or::new(
+            Script::new(get_exit_0()).unwrap(),
+            Script::new(get_exit_1()).unwrap(),
+        );
         let test_case = temp_file();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_second_true() {
-        let test = Or::new(Script::new(get_exit_1()).unwrap(), Script::new(get_exit_0()).unwrap());
+        let test = Or::new(
+            Script::new(get_exit_1()).unwrap(),
+            Script::new(get_exit_0()).unwrap(),
+        );
         let test_case = temp_file();
         assert!(test.is_interesting(test_case.path()).unwrap());
     }
 
     #[test]
     fn or_both_false() {
-        let test = Or::new(Script::new(get_exit_1()).unwrap(), Script::new(get_exit_1()).unwrap());
+        let test = Or::new(
+            Script::new(get_exit_1()).unwrap(),
+            Script::new(get_exit_1()).unwrap(),
+        );
         let test_case = temp_file();
         assert!(!test.is_interesting(test_case.path()).unwrap());
     }

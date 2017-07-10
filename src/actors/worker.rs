@@ -36,14 +36,14 @@ impl fmt::Display for WorkerId {
 enum WorkerMessage {
     NextReduction(test_case::PotentialReduction),
     Shutdown,
-    TryMerge(u64, git2::Oid)
+    TryMerge(u64, git2::Oid),
 }
 
 /// A client handle to a worker actor.
 #[derive(Clone, Debug)]
 pub struct Worker {
     id: WorkerId,
-    sender: mpsc::Sender<WorkerMessage>
+    sender: mpsc::Sender<WorkerMessage>,
 }
 
 /// Worker client API.
@@ -63,17 +63,15 @@ impl Worker {
 
         let me = Worker {
             id: id,
-            sender: sender
+            sender: sender,
         };
         let me2 = me.clone();
 
         thread::Builder::new()
             .name(format!("preduce-worker-{}", id))
-            .spawn(
-                move || {
-                    WorkerActor::run(id, me2, predicate, receiver, supervisor, logger, upstream);
-                }
-            )?;
+            .spawn(move || {
+                WorkerActor::run(id, me2, predicate, receiver, supervisor, logger, upstream);
+            })?;
 
         Ok(me)
     }
@@ -116,7 +114,7 @@ struct WorkerActor {
     incoming: mpsc::Receiver<WorkerMessage>,
     supervisor: Supervisor,
     logger: Logger,
-    repo: git::TempRepo
+    repo: git::TempRepo,
 }
 
 impl fmt::Debug for WorkerActor {
@@ -128,13 +126,13 @@ impl fmt::Debug for WorkerActor {
 #[derive(Debug)]
 struct Test {
     worker: WorkerActor,
-    reduction: test_case::PotentialReduction
+    reduction: test_case::PotentialReduction,
 }
 
 #[derive(Debug)]
 struct Interesting {
     worker: WorkerActor,
-    interesting: test_case::Interesting
+    interesting: test_case::Interesting,
 }
 
 #[derive(Debug)]
@@ -142,7 +140,7 @@ struct TryMerge {
     worker: WorkerActor,
     interesting: test_case::Interesting,
     upstream_size: u64,
-    commit_id: git2::Oid
+    commit_id: git2::Oid,
 }
 
 impl WorkerActor {
@@ -156,24 +154,12 @@ impl WorkerActor {
         upstream: path::PathBuf,
     ) {
         match {
-                  let supervisor2 = supervisor.clone();
-                  let logger2 = logger.clone();
-                  panic::catch_unwind(
-                panic::AssertUnwindSafe(
-                    move || {
-                        WorkerActor::try_run(
-                            id,
-                            me,
-                            predicate,
-                            incoming,
-                            supervisor2,
-                            logger2,
-                            upstream
-                        )
-                    }
-                )
-            )
-              } {
+            let supervisor2 = supervisor.clone();
+            let logger2 = logger.clone();
+            panic::catch_unwind(panic::AssertUnwindSafe(move || {
+                WorkerActor::try_run(id, me, predicate, incoming, supervisor2, logger2, upstream)
+            }))
+        } {
             Err(p) => {
                 supervisor.worker_panicked(id, p);
             }
@@ -205,7 +191,7 @@ impl WorkerActor {
             incoming: incoming,
             supervisor: supervisor,
             logger: logger,
-            repo: repo
+            repo: repo,
         };
 
         let mut test = match worker.get_next_reduction() {
@@ -270,12 +256,10 @@ impl WorkerActor {
         match self.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => self.shutdown(),
             WorkerMessage::NextReduction(reduction) => {
-                Some(
-                    Test {
-                        worker: self,
-                        reduction: reduction
-                    }
-                )
+                Some(Test {
+                    worker: self,
+                    reduction: reduction,
+                })
             }
             otherwise => {
                 panic!(
@@ -291,9 +275,7 @@ impl Test {
     fn judge(self) -> error::Result<Either<Interesting, WorkerActor>> {
         let _signpost = signposts::WorkerJudgeInteresting::new();
 
-        self.worker
-            .logger
-            .start_judging_interesting(self.worker.id);
+        self.worker.logger.start_judging_interesting(self.worker.id);
         let provenance = self.reduction.provenance().into();
         let maybe_interesting = self.reduction
             .into_interesting(&self.worker.predicate, &self.worker.repo)?;
@@ -301,14 +283,10 @@ impl Test {
             self.worker
                 .logger
                 .judged_interesting(self.worker.id, interesting.size());
-            Ok(
-                Left(
-                    Interesting {
-                        worker: self.worker,
-                        interesting: interesting
-                    }
-                )
-            )
+            Ok(Left(Interesting {
+                worker: self.worker,
+                interesting: interesting,
+            }))
         } else {
             self.worker
                 .logger
@@ -322,39 +300,31 @@ impl Interesting {
     fn report_to_supervisor(self) -> Either<TryMerge, Option<Test>> {
         let _signpost = signposts::WorkerReportInteresting::new();
 
-        self.worker
-            .supervisor
-            .report_interesting(
-                self.worker.me.clone(),
-                self.worker.repo.path().into(),
-                self.interesting.clone()
-            );
+        self.worker.supervisor.report_interesting(
+            self.worker.me.clone(),
+            self.worker.repo.path().into(),
+            self.interesting.clone(),
+        );
 
         match self.worker.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => Right(self.worker.shutdown()),
             WorkerMessage::NextReduction(reduction) => {
-                Right(
-                    Some(
-                        Test {
-                            worker: self.worker,
-                            reduction: reduction
-                        }
-                    )
-                )
+                Right(Some(Test {
+                    worker: self.worker,
+                    reduction: reduction,
+                }))
             }
             WorkerMessage::TryMerge(upstream_size, commit_id) => {
                 assert!(
                     upstream_size <= self.interesting.size(),
                     "Should only merge if we are not the new globally smallest test case"
                 );
-                Left(
-                    TryMerge {
-                        worker: self.worker,
-                        interesting: self.interesting,
-                        upstream_size: upstream_size,
-                        commit_id: commit_id
-                    }
-                )
+                Left(TryMerge {
+                    worker: self.worker,
+                    interesting: self.interesting,
+                    upstream_size: upstream_size,
+                    commit_id: commit_id,
+                })
             }
         }
     }
@@ -389,7 +359,7 @@ impl TryMerge {
             merged = test_case::PotentialReduction::new(
                 self.interesting.clone(),
                 "merge",
-                self.interesting
+                self.interesting,
             )?;
 
             let msg = format!("merge - {} - {}", merged.size(), merged.path().display());
@@ -401,14 +371,10 @@ impl TryMerge {
             .finished_merging(self.worker.id, merged.size(), self.upstream_size);
 
         if merged.size() < self.upstream_size {
-            Ok(
-                Some(
-                    Test {
-                        worker: self.worker,
-                        reduction: merged
-                    }
-                )
-            )
+            Ok(Some(Test {
+                worker: self.worker,
+                reduction: merged,
+            }))
         } else {
             {
                 let object = self.worker

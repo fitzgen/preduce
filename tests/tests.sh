@@ -68,7 +68,7 @@ function test_reducer {
         echo "$tmp" > "$child_stdin"
 
         # Wait for it to finish generating its reduction.
-        read empty < "$child_stdout"
+        read -t 10 empty < "$child_stdout"
         if [[ "$empty" != "" ]]; then
             echo "Reducer should have written a '\n', got: '$empty'"
             exit 1

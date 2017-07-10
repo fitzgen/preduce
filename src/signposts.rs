@@ -2,7 +2,7 @@
 extern crate signpost;
 
 macro_rules! define_signpost {
-    ( $name:ident , $code:expr ) => {
+    ( $code:expr, $name:ident ) => {
         #[cfg(feature = "signpost")]
         pub struct $name(self::signpost::AutoTrace<'static>);
 
@@ -27,12 +27,13 @@ macro_rules! define_signpost {
     }
 }
 
-define_signpost!(SupervisorHandleInteresting, 100);
-define_signpost!(SupervisorNextReduction, 101);
-define_signpost!(SupervisorShutdown, 102);
-define_signpost!(SupervisorRunLoop, 103);
+define_signpost!(100, SupervisorHandleInteresting);
+define_signpost!(101, SupervisorShutdown);
+define_signpost!(102, SupervisorRunLoop);
 
-define_signpost!(WorkerGetNextReduction, 200);
-define_signpost!(WorkerJudgeInteresting, 201);
-define_signpost!(WorkerReportInteresting, 202);
-define_signpost!(WorkerTryMerging, 203);
+define_signpost!(200, WorkerGetNextReduction);
+define_signpost!(201, WorkerJudgeInteresting);
+define_signpost!(202, WorkerReportInteresting);
+define_signpost!(203, WorkerTryMerging);
+
+define_signpost!(300, ReducerNextReduction);

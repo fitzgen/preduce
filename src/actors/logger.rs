@@ -1,6 +1,6 @@
 //! The logger actor receives log messages and writes them to a log file.
 
-use super::WorkerId;
+use super::{ReducerId, WorkerId};
 use error;
 use git2;
 use std::any::Any;
@@ -16,21 +16,26 @@ use std::thread;
 enum LoggerMessage {
     SpawningWorker(WorkerId),
     SpawnedWorker(WorkerId),
+    SpawningReducer(ReducerId),
+    SpawnedReducer(ReducerId),
     ShutdownWorker(WorkerId),
+    ShutdownReducer(ReducerId),
     WorkerPanicked(WorkerId, Box<Any + Send + 'static>),
     WorkerErrored(WorkerId, error::Error),
+    ReducerPanicked(ReducerId, Box<Any + Send + 'static>),
+    ReducerErrored(ReducerId, error::Error),
     BackingUpTestCase(String, String),
     StartJudgingInteresting(WorkerId),
     JudgedInteresting(WorkerId, u64),
     JudgedNotInteresting(WorkerId, String),
     NewSmallest(u64, u64, String),
     IsNotSmaller(String),
-    StartGeneratingNextReduction,
-    FinishGeneratingNextReduction,
-    NoMoreReductions,
+    StartGeneratingNextReduction(ReducerId),
+    FinishGeneratingNextReduction(ReducerId),
+    NoMoreReductions(ReducerId),
     FinalReducedSize(u64, u64),
     TryMerge(WorkerId, git2::Oid, git2::Oid),
-    FinishedMerging(WorkerId, u64, u64)
+    FinishedMerging(WorkerId, u64, u64),
 }
 
 impl fmt::Display for LoggerMessage {
@@ -38,9 +43,16 @@ impl fmt::Display for LoggerMessage {
         match *self {
             LoggerMessage::SpawningWorker(id) => write!(f, "Supervisor: Spawning worker {}", id),
             LoggerMessage::SpawnedWorker(id) => write!(f, "Worker {}: spawned", id),
+            LoggerMessage::SpawningReducer(id) => write!(f, "Supervisor: Spawning reducer {}", id),
+            LoggerMessage::SpawnedReducer(id) => write!(f, "Reducer {}: spawned", id),
             LoggerMessage::ShutdownWorker(id) => write!(f, "Worker {}: shutting down", id),
+            LoggerMessage::ShutdownReducer(id) => write!(f, "Reducer {}: shutting down", id),
             LoggerMessage::WorkerErrored(id, ref err) => write!(f, "Worker {}: error: {}", id, err),
             LoggerMessage::WorkerPanicked(id, _) => write!(f, "Worker {}: panicked!", id),
+            LoggerMessage::ReducerErrored(id, ref err) => {
+                write!(f, "Reducer {}: error: {}", id, err)
+            }
+            LoggerMessage::ReducerPanicked(id, _) => write!(f, "Reducer {}: panicked!", id),
             LoggerMessage::BackingUpTestCase(ref from, ref to) => {
                 write!(
                     f,
@@ -91,13 +103,13 @@ impl fmt::Display for LoggerMessage {
                     provenance
                 )
             }
-            LoggerMessage::StartGeneratingNextReduction => {
-                write!(f, "Supervisor: generating next reduction...")
+            LoggerMessage::StartGeneratingNextReduction(id) => {
+                write!(f, "Reducer {}: generating next reduction...", id)
             }
-            LoggerMessage::FinishGeneratingNextReduction => {
-                write!(f, "Supervisor: finished generating next reduction")
+            LoggerMessage::FinishGeneratingNextReduction(id) => {
+                write!(f, "Reducer {}: finished generating next reduction", id)
             }
-            LoggerMessage::NoMoreReductions => write!(f, "Supervisor: no more reductions"),
+            LoggerMessage::NoMoreReductions(id) => write!(f, "Reducer {}: no more reductions", id),
             LoggerMessage::FinalReducedSize(final_size, orig_size) => {
                 assert!(final_size <= orig_size);
                 let percent = if orig_size == 0 {
@@ -147,7 +159,7 @@ impl fmt::Display for LoggerMessage {
 /// A client to the logger actor.
 #[derive(Clone, Debug)]
 pub struct Logger {
-    sender: mpsc::Sender<LoggerMessage>
+    sender: mpsc::Sender<LoggerMessage>,
 }
 
 /// Logger client implementation.
@@ -166,16 +178,12 @@ impl Logger {
 
     /// Log the start of spawning a worker.
     pub fn spawning_worker(&self, id: WorkerId) {
-        self.sender
-            .send(LoggerMessage::SpawningWorker(id))
-            .unwrap();
+        self.sender.send(LoggerMessage::SpawningWorker(id)).unwrap();
     }
 
     /// Log the end of spawning a worker.
     pub fn spawned_worker(&self, id: WorkerId) {
-        self.sender
-            .send(LoggerMessage::SpawnedWorker(id))
-            .unwrap();
+        self.sender.send(LoggerMessage::SpawnedWorker(id)).unwrap();
     }
 
     /// Log that we are backing up the initial test case.
@@ -193,8 +201,13 @@ impl Logger {
 
     /// Log that the worker with the given id is shutting down.
     pub fn shutdown_worker(&self, id: WorkerId) {
+        self.sender.send(LoggerMessage::ShutdownWorker(id)).unwrap();
+    }
+
+    /// Log that the reducer with the given id is shutting down.
+    pub fn shutdown_reducer(&self, id: ReducerId) {
         self.sender
-            .send(LoggerMessage::ShutdownWorker(id))
+            .send(LoggerMessage::ShutdownReducer(id))
             .unwrap();
     }
 
@@ -250,30 +263,32 @@ impl Logger {
     /// it is not smaller than the current globally smallest interesting test
     /// case.
     pub fn is_not_smaller(&self, provenance: String) {
-        self.sender.send(LoggerMessage::IsNotSmaller(provenance)).unwrap();
-    }
-
-    /// Log that the supervisor has started generating the next potential
-    /// reduction.
-    pub fn start_generating_next_reduction(&self) {
         self.sender
-            .send(LoggerMessage::StartGeneratingNextReduction)
+            .send(LoggerMessage::IsNotSmaller(provenance))
             .unwrap();
     }
 
-    /// Log that the supervisor has completed generating the next potential
+    /// Log that this reducer actor has started generating its next potential
     /// reduction.
-    pub fn finish_generating_next_reduction(&self) {
+    pub fn start_generating_next_reduction(&self, id: ReducerId) {
         self.sender
-            .send(LoggerMessage::FinishGeneratingNextReduction)
+            .send(LoggerMessage::StartGeneratingNextReduction(id))
             .unwrap();
     }
 
-    /// Log that the supervisor has exhuasted potential reductions for the
+    /// Log that this reducer actor has completed generating its next potential
+    /// reduction.
+    pub fn finish_generating_next_reduction(&self, id: ReducerId) {
+        self.sender
+            .send(LoggerMessage::FinishGeneratingNextReduction(id))
+            .unwrap();
+    }
+
+    /// Log that this reducer actor has exhuasted potential reductions for the
     /// current globally smallest interesting test case.
-    pub fn no_more_reductions(&self) {
+    pub fn no_more_reductions(&self, id: ReducerId) {
         self.sender
-            .send(LoggerMessage::NoMoreReductions)
+            .send(LoggerMessage::NoMoreReductions(id))
             .unwrap();
     }
 
@@ -296,7 +311,37 @@ impl Logger {
     /// Log that the worker with the given id is attempting a merge.
     pub fn finished_merging(&self, id: WorkerId, merged_size: u64, upstream_size: u64) {
         self.sender
-            .send(LoggerMessage::FinishedMerging(id, merged_size, upstream_size))
+            .send(LoggerMessage::FinishedMerging(
+                id,
+                merged_size,
+                upstream_size,
+            ))
+            .unwrap();
+    }
+
+    /// Log that the reducer with the given id is spawning.
+    pub fn spawning_reducer(&self, id: ReducerId) {
+        self.sender
+            .send(LoggerMessage::SpawningReducer(id))
+            .unwrap();
+    }
+
+    /// Log that the reducer with the given id has completed spawning.
+    pub fn spawned_reducer(&self, id: ReducerId) {
+        self.sender.send(LoggerMessage::SpawnedReducer(id)).unwrap();
+    }
+
+    /// Log that the reducer with the given id errored out.
+    pub fn reducer_errored(&self, id: ReducerId, err: error::Error) {
+        self.sender
+            .send(LoggerMessage::ReducerErrored(id, err))
+            .unwrap();
+    }
+
+    /// Log that the reducer with the given id is shutting down.
+    pub fn reducer_panicked(&self, id: ReducerId, panic: Box<Any + Send + 'static>) {
+        self.sender
+            .send(LoggerMessage::ReducerPanicked(id, panic))
             .unwrap();
     }
 }
@@ -337,8 +382,8 @@ impl Logger {
                 }
                 LoggerMessage::FinishedMerging(_, merged_size, upstream_size)
                     if merged_size >= upstream_size => {
-                        stats.entry("merge".into()).or_insert((0, 0, 0)).2 += 1;
-                    }
+                    stats.entry("merge".into()).or_insert((0, 0, 0)).2 += 1;
+                }
                 _ => {}
             }
         }
@@ -355,14 +400,22 @@ impl Logger {
         stats.reverse();
 
         println!("{:=<85}", "");
-        println!("{:<50.50} {:>10.10}  {:>10.10}  {:>10.10}",
-                 "Reducer",
-                 "smallest",
-                 "intrstng",
-                 "not intrstng");
+        println!(
+            "{:<50.50} {:>10.10}  {:>10.10}  {:>10.10}",
+            "Reducer",
+            "smallest",
+            "intrstng",
+            "not intrstng"
+        );
         println!("{:-<85}", "");
         for (ref provenance, (smallest, not_smallest, not_interesting)) in stats {
-            println!("{:<50.50} {:>10}  {:>10}  {:>10}", provenance, smallest, not_smallest, not_interesting);
+            println!(
+                "{:<50.50} {:>10}  {:>10}  {:>10}",
+                provenance,
+                smallest,
+                not_smallest,
+                not_interesting
+            );
         }
         println!("{:=<85}", "");
     }
