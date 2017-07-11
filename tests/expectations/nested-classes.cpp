@@ -1,1 +1,1 @@
-class Nine {};
+class Nine ;

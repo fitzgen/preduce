@@ -118,6 +118,11 @@ if [[ "$CI" == "false" ]]; then
         ../reducers/clex-rename-toks.py \
         fixtures/nested-classes.cpp \
         expectations/clex-rename-toks-*
+
+    test_reducer \
+        ../reducers/clex-rm-toks-1.py \
+        fixtures/nested-classes.cpp \
+        expectations/clex-rm-toks-1-*
 fi
 
 echo "OK! All tests passed!"
