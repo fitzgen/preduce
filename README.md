@@ -80,20 +80,13 @@ To use `preduce`, invoke it with the script that implements the "is this test
 case interesting?" predicate and the test case.
 
 ```
-$ preduce [options] ./path/to/predicate ./path/to/test/case
+$ preduce [options] ./path/to/test/case ./path/to/predicate ./path/to/reducer...
 ```
 
 For information about the various options available, run
 
 ```
 $ preduce --help
-```
-
-Sometimes `preduce`'s use of `git` results in a "too many open files" error. If
-this happens to you, bump up your shell's open file limit:
-
-```
-$ ulimit -S -n 2048
 ```
 
 ### Writing an Is-Interesting? Predicate Script
