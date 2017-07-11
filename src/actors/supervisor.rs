@@ -247,8 +247,13 @@ where
 
                 SupervisorMessage::ReplyNextReduction(reducer, Some(reduction)) => {
                     assert!(self.reducers.contains_key(&reducer.id()));
-                    self.reduction_queue.push_back((reduction, reducer.id()));
-                    self.drain_queues();
+
+                    if reduction.size() < smallest_interesting.size() {
+                        self.reduction_queue.push_back((reduction, reducer.id()));
+                        self.drain_queues();
+                    } else {
+                        reducer.request_next_reduction();
+                    }
                 }
             }
 
