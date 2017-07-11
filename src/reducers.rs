@@ -126,7 +126,9 @@ impl Script {
 
     fn spawn_child(&mut self) -> error::Result<()> {
         assert!(self.seed.is_some());
-        assert!(self.out_dir.is_none() && self.child.is_none() && self.child_stdout.is_none());
+        assert!(self.out_dir.is_none());
+        assert!(self.child.is_none());
+        assert!(self.child_stdout.is_none());
 
         self.out_dir = Some(Arc::new(tempdir::TempDir::new("preduce-reducer-script")?));
 
