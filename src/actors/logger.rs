@@ -178,12 +178,12 @@ impl Logger {
 
     /// Log the start of spawning a worker.
     pub fn spawning_worker(&self, id: WorkerId) {
-        self.sender.send(LoggerMessage::SpawningWorker(id)).unwrap();
+        let _ = self.sender.send(LoggerMessage::SpawningWorker(id));
     }
 
     /// Log the end of spawning a worker.
     pub fn spawned_worker(&self, id: WorkerId) {
-        self.sender.send(LoggerMessage::SpawnedWorker(id)).unwrap();
+        let _ = self.sender.send(LoggerMessage::SpawnedWorker(id));
     }
 
     /// Log that we are backing up the initial test case.
@@ -201,52 +201,46 @@ impl Logger {
 
     /// Log that the worker with the given id is shutting down.
     pub fn shutdown_worker(&self, id: WorkerId) {
-        self.sender.send(LoggerMessage::ShutdownWorker(id)).unwrap();
+        let _ = self.sender.send(LoggerMessage::ShutdownWorker(id));
     }
 
     /// Log that the reducer with the given id is shutting down.
     pub fn shutdown_reducer(&self, id: ReducerId) {
-        self.sender
-            .send(LoggerMessage::ShutdownReducer(id))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::ShutdownReducer(id));
     }
 
     /// Log that the worker with the given id is shutting down.
     pub fn worker_errored(&self, id: WorkerId, err: error::Error) {
-        self.sender
-            .send(LoggerMessage::WorkerErrored(id, err))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::WorkerErrored(id, err));
     }
 
     /// Log that the worker with the given id is shutting down.
     pub fn worker_panicked(&self, id: WorkerId, panic: Box<Any + Send + 'static>) {
-        self.sender
-            .send(LoggerMessage::WorkerPanicked(id, panic))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::WorkerPanicked(id, panic));
     }
 
     /// Log that the worker with the given id has started running an
     /// is-interesting predicate on its test case.
     pub fn start_judging_interesting(&self, id: WorkerId) {
-        self.sender
-            .send(LoggerMessage::StartJudgingInteresting(id))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::StartJudgingInteresting(id));
     }
 
     /// Log that the worker with the given id has discovered a new interesting
     /// test case.
     pub fn judged_interesting(&self, id: WorkerId, size: u64) {
-        self.sender
-            .send(LoggerMessage::JudgedInteresting(id, size))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::JudgedInteresting(id, size));
     }
 
     /// Log that the worker with the given id has discovered that its test case
     /// is not interesting.
     pub fn judged_not_interesting(&self, id: WorkerId, provenance: String) {
-        self.sender
-            .send(LoggerMessage::JudgedNotInteresting(id, provenance))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::JudgedNotInteresting(id, provenance));
     }
 
     /// Log that the supervisor has a new globally smallest interesting test
@@ -254,95 +248,84 @@ impl Logger {
     pub fn new_smallest(&self, new_size: u64, orig_size: u64, provenance: String) {
         assert!(new_size < orig_size);
         assert!(orig_size != 0);
-        self.sender
-            .send(LoggerMessage::NewSmallest(new_size, orig_size, provenance))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::NewSmallest(new_size, orig_size, provenance));
     }
 
     /// Log that the supervisor received a new interesting test case, but that
     /// it is not smaller than the current globally smallest interesting test
     /// case.
     pub fn is_not_smaller(&self, provenance: String) {
-        self.sender
-            .send(LoggerMessage::IsNotSmaller(provenance))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::IsNotSmaller(provenance));
     }
 
     /// Log that this reducer actor has started generating its next potential
     /// reduction.
     pub fn start_generating_next_reduction(&self, id: ReducerId) {
-        self.sender
-            .send(LoggerMessage::StartGeneratingNextReduction(id))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::StartGeneratingNextReduction(id));
     }
 
     /// Log that this reducer actor has completed generating its next potential
     /// reduction.
     pub fn finish_generating_next_reduction(&self, id: ReducerId) {
-        self.sender
-            .send(LoggerMessage::FinishGeneratingNextReduction(id))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::FinishGeneratingNextReduction(id));
     }
 
     /// Log that this reducer actor has exhuasted potential reductions for the
     /// current globally smallest interesting test case.
     pub fn no_more_reductions(&self, id: ReducerId) {
-        self.sender
-            .send(LoggerMessage::NoMoreReductions(id))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::NoMoreReductions(id));
     }
 
     /// Log the final reduced test case's size once the reduction process has
     /// completed.
     pub fn final_reduced_size(&self, final_size: u64, orig_size: u64) {
         assert!(final_size <= orig_size);
-        self.sender
-            .send(LoggerMessage::FinalReducedSize(final_size, orig_size))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::FinalReducedSize(final_size, orig_size));
     }
 
     /// Log that the worker with the given id is attempting a merge.
     pub fn try_merging(&self, id: WorkerId, upstream_commit: git2::Oid, worker_commit: git2::Oid) {
-        self.sender
-            .send(LoggerMessage::TryMerge(id, upstream_commit, worker_commit))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::TryMerge(id, upstream_commit, worker_commit));
     }
 
     /// Log that the worker with the given id is attempting a merge.
     pub fn finished_merging(&self, id: WorkerId, merged_size: u64, upstream_size: u64) {
-        self.sender
+        let _ = self.sender
             .send(LoggerMessage::FinishedMerging(
                 id,
                 merged_size,
                 upstream_size,
-            ))
-            .unwrap();
+            ));
     }
 
     /// Log that the reducer with the given id is spawning.
     pub fn spawning_reducer(&self, id: ReducerId) {
-        self.sender
-            .send(LoggerMessage::SpawningReducer(id))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::SpawningReducer(id));
     }
 
     /// Log that the reducer with the given id has completed spawning.
     pub fn spawned_reducer(&self, id: ReducerId) {
-        self.sender.send(LoggerMessage::SpawnedReducer(id)).unwrap();
+        let _ = self.sender.send(LoggerMessage::SpawnedReducer(id));
     }
 
     /// Log that the reducer with the given id errored out.
     pub fn reducer_errored(&self, id: ReducerId, err: error::Error) {
-        self.sender
-            .send(LoggerMessage::ReducerErrored(id, err))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::ReducerErrored(id, err));
     }
 
     /// Log that the reducer with the given id is shutting down.
     pub fn reducer_panicked(&self, id: ReducerId, panic: Box<Any + Send + 'static>) {
-        self.sender
-            .send(LoggerMessage::ReducerPanicked(id, panic))
-            .unwrap();
+        let _ = self.sender
+            .send(LoggerMessage::ReducerPanicked(id, panic));
     }
 }
 
