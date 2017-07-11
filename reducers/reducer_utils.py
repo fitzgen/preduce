@@ -161,4 +161,11 @@ def clang_delta_reducer(seed, transformation):
         elif retcode == 255 or retcode == 1:
             return
         else:
-            raise Exception("Unknown return code from clang_delta: {}".format(str(retcode)))
+            # Ideally, we would do this:
+            #
+            #     raise Exception("Unknown return code from clang_delta: {}".format(str(retcode)))
+            #
+            # Except that `clang_delta` SIGSEGVs frequently enough that the
+            # backtraces from raising this exception would completely drown out
+            # any useful information we are otherwise logging.
+            return
