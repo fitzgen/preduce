@@ -10,7 +10,7 @@ use std::any::Any;
 use std::cmp;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
-use std::io;
+use std::io::{self, Read};
 use std::path;
 use std::sync::mpsc;
 use std::thread;
@@ -301,12 +301,28 @@ where
         drop(self.logger);
         self.logger_handle.join()?;
 
+        // Print how we got here.
         println!("git log --graph");
         ::std::process::Command::new("git")
             .args(&["log", "--graph"])
             .current_dir(self.repo.path())
             .status()
             .unwrap();
+        println!(
+            "====================================================================================="
+        );
+
+        // If the final, smallest interesting test case is small enough and its
+        // contents are UTF-8, then print it to stdout.
+        const TOO_BIG_TO_PRINT: u64 = 4096;
+        let final_size = smallest_interesting.size();
+        if final_size < TOO_BIG_TO_PRINT {
+            let mut contents = String::with_capacity(final_size as usize);
+            let mut file = fs::File::open(smallest_interesting.path())?;
+            if let Ok(_) = file.read_to_string(&mut contents) {
+                println!("{}", contents);
+            }
+        }
 
         Ok(())
     }
