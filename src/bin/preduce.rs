@@ -67,6 +67,17 @@ fn parse_args() -> clap::ArgMatches<'static> {
                 .long("no-merging")
                 .help("Do not attempt to do merges of interesting test cases."),
         )
+        .arg(
+            clap::Arg::with_name("lazily_reseed")
+                .short("l")
+                .long("lazily-reseed")
+                .help(
+                    "Instead of eagerly reseeding reducers with the new smallest \
+                     insteresting test case, let them continue generating reductions of \
+                     the older version. This will make reduction take longer, but may \
+                     result in a smaller final reduction size.",
+                ),
+        )
         .get_matches()
 }
 
@@ -81,8 +92,13 @@ fn try_main() -> error::Result<()> {
         .map(|script| {
             let reducer = reducers::Script::new(script)?;
             let reducer = reducers::Fuse::new(reducer);
-            let reducer = reducers::LazilyReseed::new(reducer);
-            Ok(Box::new(reducer) as Box<traits::Reducer>)
+
+            if args.is_present("lazily_reseed") {
+                let reducer = reducers::LazilyReseed::new(reducer);
+                Ok(Box::new(reducer) as Box<traits::Reducer>)
+            } else {
+                Ok(Box::new(reducer) as Box<traits::Reducer>)
+            }
         })
         .collect::<error::Result<Vec<_>>>()?;
 
