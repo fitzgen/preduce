@@ -206,34 +206,29 @@ impl Logger {
 
     /// Log that the reducer with the given id is shutting down.
     pub fn shutdown_reducer(&self, id: ReducerId) {
-        let _ = self.sender
-            .send(LoggerMessage::ShutdownReducer(id));
+        let _ = self.sender.send(LoggerMessage::ShutdownReducer(id));
     }
 
     /// Log that the worker with the given id is shutting down.
     pub fn worker_errored(&self, id: WorkerId, err: error::Error) {
-        let _ = self.sender
-            .send(LoggerMessage::WorkerErrored(id, err));
+        let _ = self.sender.send(LoggerMessage::WorkerErrored(id, err));
     }
 
     /// Log that the worker with the given id is shutting down.
     pub fn worker_panicked(&self, id: WorkerId, panic: Box<Any + Send + 'static>) {
-        let _ = self.sender
-            .send(LoggerMessage::WorkerPanicked(id, panic));
+        let _ = self.sender.send(LoggerMessage::WorkerPanicked(id, panic));
     }
 
     /// Log that the worker with the given id has started running an
     /// is-interesting predicate on its test case.
     pub fn start_judging_interesting(&self, id: WorkerId) {
-        let _ = self.sender
-            .send(LoggerMessage::StartJudgingInteresting(id));
+        let _ = self.sender.send(LoggerMessage::StartJudgingInteresting(id));
     }
 
     /// Log that the worker with the given id has discovered a new interesting
     /// test case.
     pub fn judged_interesting(&self, id: WorkerId, size: u64) {
-        let _ = self.sender
-            .send(LoggerMessage::JudgedInteresting(id, size));
+        let _ = self.sender.send(LoggerMessage::JudgedInteresting(id, size));
     }
 
     /// Log that the worker with the given id has discovered that its test case
@@ -256,8 +251,7 @@ impl Logger {
     /// it is not smaller than the current globally smallest interesting test
     /// case.
     pub fn is_not_smaller(&self, provenance: String) {
-        let _ = self.sender
-            .send(LoggerMessage::IsNotSmaller(provenance));
+        let _ = self.sender.send(LoggerMessage::IsNotSmaller(provenance));
     }
 
     /// Log that this reducer actor has started generating its next potential
@@ -277,8 +271,7 @@ impl Logger {
     /// Log that this reducer actor has exhuasted potential reductions for the
     /// current globally smallest interesting test case.
     pub fn no_more_reductions(&self, id: ReducerId) {
-        let _ = self.sender
-            .send(LoggerMessage::NoMoreReductions(id));
+        let _ = self.sender.send(LoggerMessage::NoMoreReductions(id));
     }
 
     /// Log the final reduced test case's size once the reduction process has
@@ -297,18 +290,16 @@ impl Logger {
 
     /// Log that the worker with the given id is attempting a merge.
     pub fn finished_merging(&self, id: WorkerId, merged_size: u64, upstream_size: u64) {
-        let _ = self.sender
-            .send(LoggerMessage::FinishedMerging(
-                id,
-                merged_size,
-                upstream_size,
-            ));
+        let _ = self.sender.send(LoggerMessage::FinishedMerging(
+            id,
+            merged_size,
+            upstream_size,
+        ));
     }
 
     /// Log that the reducer with the given id is spawning.
     pub fn spawning_reducer(&self, id: ReducerId) {
-        let _ = self.sender
-            .send(LoggerMessage::SpawningReducer(id));
+        let _ = self.sender.send(LoggerMessage::SpawningReducer(id));
     }
 
     /// Log that the reducer with the given id has completed spawning.
@@ -318,14 +309,12 @@ impl Logger {
 
     /// Log that the reducer with the given id errored out.
     pub fn reducer_errored(&self, id: ReducerId, err: error::Error) {
-        let _ = self.sender
-            .send(LoggerMessage::ReducerErrored(id, err));
+        let _ = self.sender.send(LoggerMessage::ReducerErrored(id, err));
     }
 
     /// Log that the reducer with the given id is shutting down.
     pub fn reducer_panicked(&self, id: ReducerId, panic: Box<Any + Send + 'static>) {
-        let _ = self.sender
-            .send(LoggerMessage::ReducerPanicked(id, panic));
+        let _ = self.sender.send(LoggerMessage::ReducerPanicked(id, panic));
     }
 }
 
@@ -335,6 +324,8 @@ impl Logger {
     where
         W: Write,
     {
+        let mut smallest_size = 0;
+
         // Reduction provenance -> (new smallest interesting count,
         //                          interesting-but-not-smallest count,
         //                          not interesting count)
@@ -345,6 +336,8 @@ impl Logger {
 
             match log_msg {
                 LoggerMessage::NewSmallest(new_size, orig_size, provenance) => {
+                    smallest_size = new_size;
+
                     println!(
                         "({:.2}%, {} bytes)",
                         if orig_size == 0 {
@@ -370,6 +363,9 @@ impl Logger {
                 _ => {}
             }
         }
+
+        println!("Final size is {}", smallest_size);
+        println!();
 
         let mut stats: Vec<_> = stats.into_iter().collect();
         stats.sort_by(|&(_, s), &(_, t)| {
