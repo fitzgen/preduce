@@ -149,6 +149,7 @@ impl Script {
     fn kill_child(&mut self) {
         if let Some(mut child) = self.child.take() {
             let _ = child.kill();
+            let _ = child.wait();
         }
         self.child_stdout = None;
         self.out_dir = None;
