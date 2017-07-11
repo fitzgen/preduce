@@ -11,6 +11,8 @@ found_nth_blank = True
 while found_nth_blank:
     # Read the test case path from stdin.
     out_file_path = sys.stdin.readline().strip()
+    if out_file_path == "":
+        sys.exit(0)
 
     # Write a copy of the file without the n^th blank line.
     i = 0

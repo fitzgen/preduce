@@ -26,6 +26,8 @@ with open(seed, "r") as f:
 for indent_level in range(2, max_indent, 2):
     # Read the file path from stdin.
     out_file_path = sys.stdin.readline().strip()
+    if out_file_path == "":
+        sys.exit(0)
 
     # Generate the potential reduction without any line that is indented more
     # than the current indent level.

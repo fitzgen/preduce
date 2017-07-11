@@ -85,6 +85,8 @@ def chunking_reducer(seed, min_chunk_size = 1, max_chunk_size = None):
         for i in range(0, num_lines - (chunk_size - 1)):
             # Read the file path from stdin.
             out_file_path = sys.stdin.readline().strip()
+            if out_file_path == "":
+                return
 
             # Copy the file without the current chunk.
             copy_without_lines(seed, out_file_path, i, chunk_size)
@@ -117,6 +119,8 @@ def clex_reducer(seed, clex_command):
     while True:
         # Read the file path from stdin.
         out_file_path = sys.stdin.readline().strip()
+        if out_file_path == "":
+            return
 
         retcode = 0
         with open(out_file_path, "w") as out_file:
@@ -142,6 +146,8 @@ def clang_delta_reducer(seed, transformation):
     while True:
         # Read the file path from stdin.
         out_file_path = sys.stdin.readline().strip()
+        if out_file_path == "":
+            return
 
         retcode = None
         with open(out_file_path, "w") as out_file:
