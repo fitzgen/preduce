@@ -78,6 +78,16 @@ fn parse_args() -> clap::ArgMatches<'static> {
                      result in a smaller final reduction size.",
                 ),
         )
+        .arg(
+            clap::Arg::with_name("shuffle")
+                .short("s")
+                .long("shuffle")
+                .help(
+                    "Shuffle reductions to be tested for interestingness as they are \
+                     generated in the hope that this will cause fewer merge conflicts when \
+                     combining two interesting test cases into a third reduction.",
+                ),
+        )
         .get_matches()
 }
 
@@ -92,13 +102,17 @@ fn try_main() -> error::Result<()> {
         .map(|script| {
             let reducer = reducers::Script::new(script)?;
             let reducer = reducers::Fuse::new(reducer);
+            let mut reducer = Box::new(reducer) as Box<traits::Reducer>;
 
             if args.is_present("lazily_reseed") {
-                let reducer = reducers::LazilyReseed::new(reducer);
-                Ok(Box::new(reducer) as Box<traits::Reducer>)
-            } else {
-                Ok(Box::new(reducer) as Box<traits::Reducer>)
+                reducer = Box::new(reducers::LazilyReseed::new(reducer));
             }
+
+            if args.is_present("shuffle") {
+                reducer = Box::new(reducers::Shuffle::new(10, reducer));
+            }
+
+            Ok(reducer)
         })
         .collect::<error::Result<Vec<_>>>()?;
 
