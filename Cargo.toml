@@ -21,6 +21,9 @@ tempdir = "0.3.5"
 optional = true
 version = "0.1.0"
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.26"
+
 [lib]
 path = "src/lib.rs"
 

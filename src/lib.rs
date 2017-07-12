@@ -172,6 +172,13 @@ where
     /// # }
     /// ```
     pub fn run(self) -> error::Result<()> {
+        // We must be robust in the face of one of our reducer scripts dying
+        // while we're still trying to communicate with it. We are set up to
+        // handle `Err` results properly, but we can't tolerate receiving
+        // SIGPIPE and getting killed because we attempted to write to the
+        // defunct child process's stdin.
+        let _ignore_sigpipe = sig::AutoIgnoreSigpipe::default();
+
         let (_, handle) = actors::Supervisor::spawn(self)?;
         handle.join()??;
         Ok(())
@@ -213,4 +220,35 @@ where
         );
         mem::replace(&mut self.reducers, vec![])
     }
+}
+
+#[cfg(unix)]
+#[allow(unsafe_code)]
+mod sig {
+    extern crate libc;
+
+    pub struct AutoIgnoreSigpipe {
+        previous_handler: libc::sighandler_t,
+    }
+
+    impl Default for AutoIgnoreSigpipe {
+        fn default() -> AutoIgnoreSigpipe {
+            let previous_handler = unsafe { libc::signal(libc::SIGPIPE, libc::SIG_IGN) };
+            AutoIgnoreSigpipe { previous_handler }
+        }
+    }
+
+    impl Drop for AutoIgnoreSigpipe {
+        fn drop(&mut self) {
+            unsafe {
+                libc::signal(libc::SIGPIPE, self.previous_handler);
+            }
+        }
+    }
+}
+
+#[cfg(not(unix))]
+mod sig {
+    #[derive(Default)]
+    pub struct AutoIgnoreSigpipe;
 }
