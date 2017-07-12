@@ -11,6 +11,7 @@
 
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
+#![deny(unsafe_code)]
 
 extern crate either;
 extern crate git2;
