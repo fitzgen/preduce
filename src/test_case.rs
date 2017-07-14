@@ -1,6 +1,7 @@
 //! Types related to test cases, their interestingness, and potential reductions
 //! of them.
 
+use either::{Either, Left, Right};
 use error;
 use git::{self, RepoExt};
 use git2;
@@ -34,6 +35,14 @@ struct TempFileInner {
     dir: Arc<tempdir::TempDir>,
 }
 
+impl PartialEq for TempFileInner {
+    fn eq(&self, rhs: &TempFileInner) -> bool {
+        self.file_path == rhs.file_path
+    }
+}
+
+impl Eq for TempFileInner {}
+
 /// An immutable, temporary file within a temporary directory.
 ///
 /// When generating reductions, we never use a git repository's copy of its
@@ -48,7 +57,7 @@ struct TempFileInner {
 /// enable a cycle's construction, and because the underlying directories and
 /// files have no outgoing edges which could become back-edges. We are strictly
 /// dealing with a DAG, and therefore don't have to worry about leaking cycles.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TempFile {
     inner: Arc<TempFileInner>,
 }
@@ -119,7 +128,7 @@ impl From<InitialInteresting> for TempFile {
 
 /// A test case with potential: it may or may not be smaller than our smallest
 /// interesting test case, and it may or may not be interesting.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PotentialReduction {
     /// From which reducer did this potential reduction came from?
     provenance: String,
@@ -205,7 +214,7 @@ impl PotentialReduction {
         self,
         judge: &I,
         repo: &git2::Repository,
-    ) -> error::Result<Option<Interesting>>
+    ) -> error::Result<Either<Interesting, PotentialReduction>>
     where
         I: ?Sized + traits::IsInteresting,
     {
@@ -213,7 +222,7 @@ impl PotentialReduction {
         assert!(self.path().is_file());
 
         if !judge.is_interesting(self.path())? {
-            return Ok(None);
+            return Ok(Right(self));
         }
 
         let repo_test_case_path = repo.test_case_path()?;
@@ -222,7 +231,7 @@ impl PotentialReduction {
         let msg = self.make_commit_message();
         let commit_id = repo.commit_test_case(&msg)?;
 
-        Ok(Some(Interesting {
+        Ok(Left(Interesting {
             kind: InterestingKind::Reduction(self),
             commit_id: commit_id,
         }))
@@ -502,6 +511,7 @@ mod tests {
             .clone()
             .into_interesting(&judge, &repo)
             .expect("interesting reduction should be ok")
+            .left()
             .expect("interesting reduction should be some");
 
         assert_eq!(

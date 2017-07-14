@@ -22,6 +22,7 @@ mod actors;
 pub mod error;
 mod git;
 pub mod interesting;
+mod oracle;
 mod queue;
 pub mod reducers;
 mod signposts;

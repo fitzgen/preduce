@@ -195,7 +195,7 @@ impl WorkerActor {
             repo: repo,
         };
 
-        let mut test = match worker.get_next_reduction() {
+        let mut test = match worker.get_next_reduction(None) {
             Some(test) => test,
             None => return Ok(()),
         };
@@ -233,10 +233,10 @@ impl WorkerActor {
                         }
                     }
                 }
-                Right(worker) => {
+                Right((worker, not_interesting)) => {
                     // The test case was judged not interesting; grab a new
                     // potential reduction to test.
-                    test = match worker.get_next_reduction() {
+                    test = match worker.get_next_reduction(Some(not_interesting)) {
                         Some(test) => test,
                         None => return Ok(()),
                     };
@@ -250,10 +250,14 @@ impl WorkerActor {
         None
     }
 
-    fn get_next_reduction(self) -> Option<Test> {
+    fn get_next_reduction(
+        self,
+        not_interesting: Option<test_case::PotentialReduction>,
+    ) -> Option<Test> {
         let _signpost = signposts::WorkerGetNextReduction::new();
 
-        self.supervisor.request_next_reduction(self.me.clone());
+        self.supervisor
+            .request_next_reduction(self.me.clone(), not_interesting);
         match self.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => self.shutdown(),
             WorkerMessage::NextReduction(reduction) => {
@@ -273,7 +277,9 @@ impl WorkerActor {
 }
 
 impl Test {
-    fn judge(self) -> error::Result<Either<Interesting, WorkerActor>> {
+    fn judge(
+        self,
+    ) -> error::Result<Either<Interesting, (WorkerActor, test_case::PotentialReduction)>> {
         let _signpost = signposts::WorkerJudgeInteresting::new();
 
         {
@@ -289,22 +295,24 @@ impl Test {
         }
 
         self.worker.logger.start_judging_interesting(self.worker.id);
-        let provenance = self.reduction.provenance().into();
-        let maybe_interesting = self.reduction
-            .into_interesting(&self.worker.predicate, &self.worker.repo)?;
-        if let Some(interesting) = maybe_interesting {
-            self.worker
-                .logger
-                .judged_interesting(self.worker.id, interesting.size());
-            Ok(Left(Interesting {
-                worker: self.worker,
-                interesting: interesting,
-            }))
-        } else {
-            self.worker
-                .logger
-                .judged_not_interesting(self.worker.id, provenance);
-            Ok(Right(self.worker))
+        match self.reduction
+            .into_interesting(&self.worker.predicate, &self.worker.repo)? {
+            Left(interesting) => {
+                self.worker
+                    .logger
+                    .judged_interesting(self.worker.id, interesting.size());
+                Ok(Left(Interesting {
+                    worker: self.worker,
+                    interesting: interesting,
+                }))
+            }
+            Right(not_interesting) => {
+                let provenance = not_interesting.provenance().into();
+                self.worker
+                    .logger
+                    .judged_not_interesting(self.worker.id, provenance);
+                Ok(Right((self.worker, not_interesting)))
+            }
         }
     }
 }
@@ -399,12 +407,12 @@ impl TryMerge {
         // we fetch, then we can't be in the race scenario where merging makes
         // sense.
         if self.worker.repo.find_commit(self.commit_id).is_ok() {
-            return Ok(self.worker.get_next_reduction());
+            return Ok(self.worker.get_next_reduction(None));
         }
 
         Ok(match self.try_merge()? {
             Left(merged) => Some(merged),
-            Right(worker) => worker.get_next_reduction(),
+            Right(worker) => worker.get_next_reduction(None),
         })
     }
 }

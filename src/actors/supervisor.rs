@@ -5,6 +5,7 @@ use super::{Logger, Reducer, ReducerId, Worker, WorkerId};
 use super::super::Options;
 use error;
 use git::{self, RepoExt};
+use oracle::ReductionOracle;
 use queue::ReductionQueue;
 use signposts;
 use std::any::Any;
@@ -24,7 +25,7 @@ enum SupervisorMessage {
     // From workers.
     WorkerPanicked(WorkerId, Box<Any + Send + 'static>),
     WorkerErrored(WorkerId, error::Error),
-    RequestNextReduction(Worker),
+    RequestNextReduction(Worker, Option<test_case::PotentialReduction>),
     ReportInteresting(Worker, path::PathBuf, test_case::Interesting),
 
     // From reducers.
@@ -67,9 +68,16 @@ impl Supervisor {
 
     /// Request the next potentially-interesting test case reduction. The
     /// response will be sent back to the `who` worker.
-    pub fn request_next_reduction(&self, who: Worker) {
+    pub fn request_next_reduction(
+        &self,
+        who: Worker,
+        not_interesting: Option<test_case::PotentialReduction>,
+    ) {
         self.sender
-            .send(SupervisorMessage::RequestNextReduction(who))
+            .send(SupervisorMessage::RequestNextReduction(
+                who,
+                not_interesting,
+            ))
             .unwrap();
     }
 
@@ -151,6 +159,7 @@ where
     exhausted_reducers: HashSet<ReducerId>,
     reduction_queue: ReductionQueue,
     interesting_counter: usize,
+    oracle: ReductionOracle,
 }
 
 impl<I> SupervisorActor<I>
@@ -181,6 +190,7 @@ where
             exhausted_reducers: HashSet::with_capacity(num_reducers),
             reduction_queue: ReductionQueue::with_capacity(num_reducers),
             interesting_counter: 0,
+            oracle: ReductionOracle::default(),
         };
 
         supervisor.backup_original_test_case()?;
@@ -217,7 +227,10 @@ where
                     self.restart_worker(id)?;
                 }
 
-                SupervisorMessage::RequestNextReduction(who) => {
+                SupervisorMessage::RequestNextReduction(who, not_interesting) => {
+                    if let Some(not_interesting) = not_interesting {
+                        self.oracle.observe_not_interesting(&not_interesting);
+                    }
                     self.enqueue_worker_for_reduction(who);
                 }
 
@@ -253,7 +266,9 @@ where
                     debug_assert!(self.repo.find_object(reduction.parent(), None).is_ok());
 
                     if reduction.size() < smallest_interesting.size() {
-                        self.reduction_queue.insert(reduction, reducer.id());
+                        let priority = self.oracle.predict(&reduction);
+                        self.reduction_queue
+                            .insert(reduction, reducer.id(), priority);
                         self.drain_queues();
                     } else {
                         reducer.request_next_reduction();
@@ -403,6 +418,8 @@ where
             // lose this incremental progress!
             *smallest_interesting = interesting;
             fs::copy(smallest_interesting.path(), &self.opts.test_case)?;
+            self.oracle
+                .observe_smallest_interesting(&smallest_interesting);
             let provenance = smallest_interesting.provenance().into();
             self.logger.new_smallest(new_size, orig_size, provenance);
 
@@ -451,6 +468,7 @@ where
             // interesting test case and see if that is also interesting and
             // even smaller than both our current smallest and the
             // interesting-but-not-smaller test case.
+            self.oracle.observe_not_smallest_interesting(&interesting);
             self.logger.is_not_smaller(interesting.provenance().into());
             if self.opts.should_try_merging() {
                 who.try_merge(old_size, self.repo.head_id()?);
