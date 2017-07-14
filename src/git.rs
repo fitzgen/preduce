@@ -91,7 +91,13 @@ impl RepoExt for git2::Repository {
 
     fn fetch_origin(&self) -> error::Result<()> {
         let mut origin = self.find_remote("origin")?;
-        origin.fetch(&["master"], None, None)?;
+        origin.fetch(
+            &["master"],
+            Some(
+                git2::FetchOptions::new().download_tags(git2::AutotagOption::All),
+            ),
+            None,
+        )?;
         Ok(())
     }
 
@@ -102,7 +108,13 @@ impl RepoExt for git2::Repository {
         let remote = remote.as_ref();
         let remote = remote.to_string_lossy();
         let mut remote = self.remote_anonymous(&remote)?;
-        remote.fetch(&["master"], None, None)?;
+        remote.fetch(
+            &["master"],
+            Some(
+                git2::FetchOptions::new().download_tags(git2::AutotagOption::All),
+            ),
+            None,
+        )?;
         let object = self.find_object(commit_id, Some(git2::ObjectType::Commit))?;
         self.reset(
             &object,

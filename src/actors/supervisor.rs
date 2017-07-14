@@ -149,6 +149,7 @@ where
     reducers: HashMap<ReducerId, Reducer>,
     exhausted_reducers: HashSet<ReducerId>,
     reduction_queue: VecDeque<(test_case::PotentialReduction, ReducerId)>,
+    interesting_counter: usize,
 }
 
 impl<I> SupervisorActor<I>
@@ -178,6 +179,7 @@ where
             reducers: HashMap::with_capacity(num_reducers),
             exhausted_reducers: HashSet::with_capacity(num_reducers),
             reduction_queue: VecDeque::with_capacity(num_reducers),
+            interesting_counter: 0,
         };
 
         supervisor.backup_original_test_case()?;
@@ -247,6 +249,7 @@ where
 
                 SupervisorMessage::ReplyNextReduction(reducer, Some(reduction)) => {
                     assert!(self.reducers.contains_key(&reducer.id()));
+                    debug_assert!(self.repo.find_object(reduction.parent(), None).is_ok());
 
                     if reduction.size() < smallest_interesting.size() {
                         self.reduction_queue.push_back((reduction, reducer.id()));
@@ -406,6 +409,13 @@ where
             // commit.
             self.repo
                 .fetch_and_reset_hard(downstream, smallest_interesting.commit_id())?;
+            {
+                let tag_name = format!("interesting-{}", self.interesting_counter);
+                self.interesting_counter += 1;
+                let commit = self.repo.head_commit()?;
+                self.repo
+                    .tag(&tag_name, commit.as_object(), &git::signature(), "", false)?;
+            }
 
             // Third, re-seed our reducer actors with the new test case, and
             // respawn any workers that might have shutdown because we exhausted

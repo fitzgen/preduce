@@ -354,6 +354,7 @@ impl TryMerge {
         self.worker.repo.fetch_origin()?;
         let their_commit = self.commit_id;
 
+        assert!(our_commit != their_commit);
         if self.worker
             .repo
             .merge_and_commit(our_commit, their_commit)?
@@ -368,10 +369,6 @@ impl TryMerge {
 
         let merged =
             test_case::PotentialReduction::new(self.interesting.clone(), "merge", merged_file)?;
-
-        // TODO FITZGEN
-        // let msg = format!("merge - {} - {}", merged.size(), merged.path().display());
-        // self.worker.repo.commit_test_case(&msg)?;
 
         self.worker
             .logger
