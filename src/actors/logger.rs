@@ -335,6 +335,13 @@ impl Logger {
             writeln!(&mut to, "{}", log_msg).expect("Should write to log file");
 
             match log_msg {
+                msg @ LoggerMessage::ReducerErrored(_, _) |
+                msg @ LoggerMessage::WorkerErrored(_, _) |
+                msg @ LoggerMessage::ReducerPanicked(_, _) |
+                msg @ LoggerMessage::WorkerPanicked(_, _) => {
+                    println!("{}", msg);
+                }
+
                 LoggerMessage::NewSmallest(new_size, orig_size, provenance) => {
                     smallest_size = new_size;
 
