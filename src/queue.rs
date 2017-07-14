@@ -1,11 +1,11 @@
-//! TODO FITZGEN
+//! The queue for reductions that haven't been tested yet.
 
 use test_case;
 use std::collections::{vec_deque, VecDeque};
 use std::ops;
 use actors::ReducerId;
 
-/// TODO FITZGEN
+/// The queue for reductions that haven't been tested for interesting-ness yet.
 pub struct ReductionQueue {
     reductions: VecDeque<(test_case::PotentialReduction, ReducerId)>,
 }
