@@ -275,6 +275,18 @@ impl Test {
     fn judge(self) -> error::Result<Either<Interesting, WorkerActor>> {
         let _signpost = signposts::WorkerJudgeInteresting::new();
 
+        {
+            self.worker.repo.fetch_origin()?;
+            let object = self.worker
+                .repo
+                .find_object(self.reduction.parent(), Some(git2::ObjectType::Commit))?;
+            self.worker.repo.reset(
+                &object,
+                git2::ResetType::Hard,
+                Some(git2::build::CheckoutBuilder::new().force()),
+            )?;
+        }
+
         self.worker.logger.start_judging_interesting(self.worker.id);
         let provenance = self.reduction.provenance().into();
         let maybe_interesting = self.reduction
