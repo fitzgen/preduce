@@ -394,10 +394,19 @@ impl Logger {
             "not intrstng"
         );
         println!("{:-<85}", "");
-        for (ref provenance, (smallest, not_smallest, not_interesting)) in stats {
+        for (ref reducer, (smallest, not_smallest, not_interesting)) in stats {
+            // Take the last 50 characters of the reducer name, not the first
+            // 50.
+            let reducer: String = reducer
+                .chars()
+                .rev()
+                .take_while(|&c| c != '/')
+                .take(50)
+                .collect();
+            let reducer: String = reducer.chars().rev().collect();
             println!(
                 "{:<50.50} {:>10}  {:>10}  {:>10}",
-                provenance,
+                reducer,
                 smallest,
                 not_smallest,
                 not_interesting
