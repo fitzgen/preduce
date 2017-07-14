@@ -29,9 +29,6 @@ pub trait RepoExt {
     /// Get the commit for HEAD.
     fn head_commit(&self) -> error::Result<git2::Commit>;
 
-    /// Get the tree for HEAD.
-    fn head_tree(&self) -> error::Result<git2::Tree>;
-
     /// Stage the test case and commit it.
     fn commit_test_case(&self, msg: &str) -> error::Result<git2::Oid>;
 
@@ -45,6 +42,12 @@ pub trait RepoExt {
     fn fetch_and_reset_hard<P>(&self, remote: P, commit_id: git2::Oid) -> error::Result<()>
     where
         P: AsRef<path::Path>;
+
+    fn merge_and_commit(
+        &self,
+        first: git2::Oid,
+        second: git2::Oid,
+    ) -> error::Result<Option<git2::Oid>>;
 }
 
 impl RepoExt for git2::Repository {
@@ -63,20 +66,16 @@ impl RepoExt for git2::Repository {
         Ok(head)
     }
 
-    fn head_tree(&self) -> error::Result<git2::Tree> {
-        let tree = self.head_commit()?.tree()?;
-        Ok(tree)
-    }
-
     fn commit_test_case(&self, msg: &str) -> error::Result<git2::Oid> {
         let mut index = self.index()?;
         index.add_path(path::Path::new(TEST_CASE_FILE_NAME))?;
-
+        let tree = index.write_tree_to(self)?;
+        let tree = self.find_tree(tree)?;
         let sig = signature();
         let head = self.head_commit()?;
-        let tree = self.head_tree()?;
         let parents = [&head];
         let commit_id = self.commit(Some("HEAD"), &sig, &sig, msg, &tree, &parents[..])?;
+        self.checkout_head(Some(git2::build::CheckoutBuilder::new().force()))?;
         Ok(commit_id)
     }
 
@@ -105,8 +104,44 @@ impl RepoExt for git2::Repository {
         let mut remote = self.remote_anonymous(&remote)?;
         remote.fetch(&["master"], None, None)?;
         let object = self.find_object(commit_id, Some(git2::ObjectType::Commit))?;
-        self.reset(&object, git2::ResetType::Hard, None)?;
+        self.reset(
+            &object,
+            git2::ResetType::Hard,
+            Some(git2::build::CheckoutBuilder::new().force()),
+        )?;
         Ok(())
+    }
+
+    fn merge_and_commit(
+        &self,
+        ours: git2::Oid,
+        theirs: git2::Oid,
+    ) -> error::Result<Option<git2::Oid>> {
+        let ours = self.find_commit(ours)?;
+        let theirs = self.find_commit(theirs)?;
+
+        let mut index = self.merge_commits(
+            &ours,
+            &theirs,
+            // Prefer theirs because they're smaller.
+            Some(
+                git2::MergeOptions::new().file_favor(git2::FileFavor::Theirs),
+            ),
+        )?;
+
+        if index.has_conflicts() {
+            index.clear()?;
+            self.checkout_head(Some(git2::build::CheckoutBuilder::new().force()))?;
+            return Ok(None);
+        }
+
+        let tree_id = index.write_tree_to(self)?;
+        let tree = self.find_tree(tree_id)?;
+        let sig = signature();
+        let parents = [&ours, &theirs];
+        let commit_id = self.commit(Some("HEAD"), &sig, &sig, "merge", &tree, &parents[..])?;
+        self.checkout_head(Some(git2::build::CheckoutBuilder::new().force()))?;
+        Ok(Some(commit_id))
     }
 }
 

@@ -8,6 +8,7 @@ use git::{self, RepoExt};
 use git2;
 use signposts;
 use std::fmt;
+use std::fs;
 use std::panic;
 use std::path;
 use std::sync::mpsc;
@@ -343,60 +344,70 @@ impl Interesting {
 }
 
 impl TryMerge {
-    fn into_test(self) -> error::Result<Option<Test>> {
-        // Should split this out into `into_merged_test`, call that new function
-        // here, and then inspect its errors for merge failures and recover from
-        // them gracefully? Right now, if there is a merge conflict, we will
-        // kill the whole worker and rely on the supervisor to spawn a new one
-        // in its stead, which seems fairly heavy for something we expect to
-        // happen fairly often.
-
-        let _signpost = signposts::WorkerTryMerging::new();
-
+    fn try_merge(self) -> error::Result<Either<Test, WorkerActor>> {
         self.worker
             .logger
             .try_merging(self.worker.id, self.commit_id, self.interesting.commit_id());
 
-        let merged;
+        let our_commit = self.worker.repo.head_id()?;
+
+        self.worker.repo.fetch_origin()?;
+        let their_commit = self.commit_id;
+
+        if self.worker
+            .repo
+            .merge_and_commit(our_commit, their_commit)?
+            .is_none()
         {
-            let our_commit = self.worker.repo.head_commit()?;
-
-            self.worker.repo.fetch_origin()?;
-            let their_commit = self.worker.repo.find_commit(self.commit_id)?;
-
-            self.worker
-                .repo
-                .merge_commits(&our_commit, &their_commit, None)?;
-
-            merged = test_case::PotentialReduction::new(
-                self.interesting.clone(),
-                "merge",
-                self.interesting,
-            )?;
-
-            let msg = format!("merge - {} - {}", merged.size(), merged.path().display());
-            self.worker.repo.commit_test_case(&msg)?;
+            // Merging conflicted; move along.
+            return Ok(Right(self.worker));
         }
+
+        let merged_file = test_case::TempFile::anonymous()?;
+        fs::copy(self.worker.repo.test_case_path()?, merged_file.path())?;
+
+        let merged =
+            test_case::PotentialReduction::new(self.interesting.clone(), "merge", merged_file)?;
+
+        // TODO FITZGEN
+        // let msg = format!("merge - {} - {}", merged.size(), merged.path().display());
+        // self.worker.repo.commit_test_case(&msg)?;
 
         self.worker
             .logger
             .finished_merging(self.worker.id, merged.size(), self.upstream_size);
 
-        if merged.size() < self.upstream_size {
-            Ok(Some(Test {
+        Ok(if merged.size() < self.upstream_size {
+            Left(Test {
                 worker: self.worker,
                 reduction: merged,
-            }))
+            })
         } else {
-            {
-                let object = self.worker
-                    .repo
-                    .find_object(self.commit_id, Some(git2::ObjectType::Commit))?;
-                self.worker
-                    .repo
-                    .reset(&object, git2::ResetType::Hard, None)?;
-            }
-            Ok(self.worker.get_next_reduction())
+            Right(self.worker)
+        })
+    }
+
+    fn into_test(self) -> error::Result<Option<Test>> {
+        let _signpost = signposts::WorkerTryMerging::new();
+
+        debug_assert!({
+            self.worker.repo.head_id()? == self.interesting.commit_id()
+        });
+
+        // Merges are only useful when we lose the race to become the new
+        // smallest interesting test case to another worker that produces a
+        // smaller interesting test case than we did. In such a situation, the
+        // race-winner's commit is not in our repository, only upstream.
+        // Therefore, if we already have the commit in our repository *before*
+        // we fetch, then we can't be in the race scenario where merging makes
+        // sense.
+        if self.worker.repo.find_commit(self.commit_id).is_ok() {
+            return Ok(self.worker.get_next_reduction());
         }
+
+        Ok(match self.try_merge()? {
+            Left(merged) => Some(merged),
+            Right(worker) => worker.get_next_reduction(),
+        })
     }
 }

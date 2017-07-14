@@ -183,6 +183,12 @@ impl PotentialReduction {
         })
     }
 
+    /// Get the commit id of the interesting test case that this reduction was
+    /// generated from.
+    pub fn parent(&self) -> git2::Oid {
+        self.parent
+    }
+
     fn make_commit_message(&self) -> String {
         format!(
             "{} - {} - {}",

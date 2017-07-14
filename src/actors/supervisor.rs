@@ -438,13 +438,13 @@ where
             // Although the test case is interesting, it is not smaller. Tell
             // the worker to try and merge it with our current smallest
             // interesting test case and see if that is also interesting and
-            // even smaller. Unless it is already a merge, in which case, we
-            // abandon this thread of traversal.
+            // even smaller than both our current smallest and the
+            // interesting-but-not-smaller test case.
             self.logger.is_not_smaller(interesting.provenance().into());
-            if !self.opts.should_try_merging() || interesting.provenance() == "merge" {
-                self.enqueue_worker_for_reduction(who);
-            } else {
+            if self.opts.should_try_merging() {
                 who.try_merge(old_size, self.repo.head_id()?);
+            } else {
+                self.enqueue_worker_for_reduction(who);
             }
         }
 
