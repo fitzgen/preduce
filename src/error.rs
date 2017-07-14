@@ -39,7 +39,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error> {
         match *self {
-            Error::Git(ref e) => fmt::Display::fmt(e, f),
+            Error::Git(ref e) => write!(f, "git: {}", e),
             Error::Io(ref e) => fmt::Display::fmt(e, f),
             Error::Thread(ref e) => write!(f, "Thread panicked: {:?}", e),
             Error::ReducerActorPanicked => write!(f, "A reducer actor panicked"),
