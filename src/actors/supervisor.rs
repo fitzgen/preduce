@@ -5,10 +5,11 @@ use super::{Logger, Reducer, ReducerId, Worker, WorkerId};
 use super::super::Options;
 use error;
 use git::{self, RepoExt};
+use queue::ReductionQueue;
 use signposts;
 use std::any::Any;
 use std::cmp;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, Read};
 use std::path;
@@ -148,7 +149,7 @@ where
     idle_workers: Vec<Worker>,
     reducers: HashMap<ReducerId, Reducer>,
     exhausted_reducers: HashSet<ReducerId>,
-    reduction_queue: VecDeque<(test_case::PotentialReduction, ReducerId)>,
+    reduction_queue: ReductionQueue,
     interesting_counter: usize,
 }
 
@@ -178,7 +179,7 @@ where
             idle_workers: Vec::with_capacity(num_workers),
             reducers: HashMap::with_capacity(num_reducers),
             exhausted_reducers: HashSet::with_capacity(num_reducers),
-            reduction_queue: VecDeque::with_capacity(num_reducers),
+            reduction_queue: ReductionQueue::with_capacity(num_reducers),
             interesting_counter: 0,
         };
 
@@ -252,7 +253,7 @@ where
                     debug_assert!(self.repo.find_object(reduction.parent(), None).is_ok());
 
                     if reduction.size() < smallest_interesting.size() {
-                        self.reduction_queue.push_back((reduction, reducer.id()));
+                        self.reduction_queue.insert(reduction, reducer.id());
                         self.drain_queues();
                     } else {
                         reducer.request_next_reduction();
@@ -431,7 +432,7 @@ where
             // from the new seed.
             {
                 let reducers = &self.reducers;
-                self.reduction_queue.retain(|&(ref reduction, reducer_id)| {
+                self.reduction_queue.retain(|reduction, reducer_id| {
                     if reduction.size() < new_size {
                         return true;
                     }
