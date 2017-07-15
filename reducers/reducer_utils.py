@@ -31,6 +31,7 @@ def get_topformflat():
         "/usr/libexec/topformflat",
         "/usr/lib/x86_64-linux-gnu/topformflat",
         "/usr/lib/creduce/topformflat",
+        "/usr/local/Cellar/creduce/2.7.0/libexec/topformflat",
     ])
 
 def get_clex():
@@ -40,6 +41,7 @@ def get_clex():
         "/usr/libexec/clex",
         "/usr/lib/x86_64-linux-gnu/clex",
         "/usr/lib/creduce/clex",
+        "/usr/local/Cellar/creduce/2.7.0/libexec/clex",
     ])
 
 def get_clang_delta():
@@ -49,6 +51,7 @@ def get_clang_delta():
         "/usr/libexec/clang_delta",
         "/usr/lib/x86_64-linux-gnu/clang_delta",
         "/usr/lib/creduce/clang_delta",
+        "/usr/local/Cellar/creduce/2.7.0/libexec/clang_delta",
     ])
 
 def chunk_sizes(min_chunk_size, max_chunk_size):
