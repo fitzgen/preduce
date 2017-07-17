@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use test_case::{self, TestCaseMethods};
 use traits;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct Observed {
     smallest_interesting_count: u32,
     not_smallest_interesting_count: u32,
@@ -25,7 +25,7 @@ impl Observed {
 
 /// An `Oracle` implementation that scores test cases based on their reduction's
 /// historical rate of producing interesting test cases.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct InterestingRate {
     observations: HashMap<String, Observed>,
 }

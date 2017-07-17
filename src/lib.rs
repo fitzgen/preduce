@@ -22,7 +22,7 @@ mod actors;
 pub mod error;
 mod git;
 pub mod interesting;
-mod oracle;
+pub mod oracle;
 mod queue;
 pub mod reducers;
 pub mod score;
