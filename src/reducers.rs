@@ -3,6 +3,7 @@
 extern crate rand;
 
 use error;
+use std::borrow::Cow;
 use std::io::{Read, Write};
 use std::path;
 use std::process;
@@ -12,6 +13,10 @@ use test_case::{self, TestCaseMethods};
 use traits::Reducer;
 
 impl Reducer for Box<Reducer> {
+    fn name(&self) -> Cow<str> {
+        (**self).name()
+    }
+
     fn set_seed(&mut self, seed: test_case::Interesting) {
         (**self).set_seed(seed)
     }
@@ -252,6 +257,10 @@ impl Drop for Script {
 }
 
 impl Reducer for Script {
+    fn name(&self) -> Cow<str> {
+        self.program.to_string_lossy()
+    }
+
     fn set_seed(&mut self, seed: test_case::Interesting) {
         self.seed = Some(seed);
 
@@ -311,6 +320,10 @@ impl<R> Reducer for LazilyReseed<R>
 where
     R: Reducer,
 {
+    fn name(&self) -> Cow<str> {
+        self.inner.name()
+    }
+
     fn set_seed(&mut self, seed: test_case::Interesting) {
         if {
             self.current_seed.is_none() ||
@@ -411,6 +424,10 @@ impl<R> Reducer for Shuffle<R>
 where
     R: Reducer,
 {
+    fn name(&self) -> Cow<str> {
+        self.reducer.name()
+    }
+
     fn set_seed(&mut self, seed: test_case::Interesting) {
         self.buffer.clear();
         self.reducer.set_seed(seed);
@@ -497,6 +514,19 @@ where
     T: Reducer,
     U: Reducer,
 {
+    fn name(&self) -> Cow<str> {
+        let first_name = self.first.name();
+        let second_name = self.second.name();
+        let mut name =
+            String::with_capacity(first_name.len() + second_name.len() + "Chain(, )".len());
+        name.push_str("Chain(");
+        name.push_str(&first_name);
+        name.push_str(", ");
+        name.push_str(&second_name);
+        name.push(')');
+        Cow::from(name)
+    }
+
     fn set_seed(&mut self, seed: test_case::Interesting) {
         self.first.set_seed(seed.clone());
         self.second.set_seed(seed);
@@ -584,6 +614,10 @@ impl<R> Reducer for Fuse<R>
 where
     R: Reducer,
 {
+    fn name(&self) -> Cow<str> {
+        self.reducer.name()
+    }
+
     fn set_seed(&mut self, seed: test_case::Interesting) {
         self.reducer.set_seed(seed);
         self.finished = false;
@@ -608,6 +642,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::borrow::Cow;
     use std::env;
     use std::fs;
     use test_case;
@@ -711,6 +746,10 @@ mod tests {
         struct Erratic(usize);
 
         impl Reducer for Erratic {
+            fn name(&self) -> Cow<str> {
+                Cow::from("Erratic")
+            }
+
             fn set_seed(&mut self, _: test_case::Interesting) {}
 
             fn next_potential_reduction(

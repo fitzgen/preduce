@@ -2,6 +2,7 @@
 
 use error;
 use score;
+use std::borrow::Cow;
 use std::fmt;
 use std::path;
 use test_case;
@@ -18,6 +19,9 @@ use test_case;
 ///
 /// This is analogous to a "pass" in creduce.
 pub trait Reducer: fmt::Debug + Send {
+    /// Get this reducer's unique name.
+    fn name(&self) -> Cow<str>;
+
     /// Configure this reducer to use generate potential reductions from the
     /// given seed test case.
     fn set_seed(&mut self, seed: test_case::Interesting);
