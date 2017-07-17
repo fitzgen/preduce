@@ -25,6 +25,7 @@ pub mod interesting;
 mod oracle;
 mod queue;
 pub mod reducers;
+pub mod score;
 mod signposts;
 pub mod test_case;
 pub mod traits;

@@ -5,7 +5,7 @@ use super::{Logger, Reducer, ReducerId, Worker, WorkerId};
 use super::super::Options;
 use error;
 use git::{self, RepoExt};
-use oracle::ReductionOracle;
+use oracle;
 use queue::ReductionQueue;
 use signposts;
 use std::any::Any;
@@ -17,7 +17,7 @@ use std::path;
 use std::sync::mpsc;
 use std::thread;
 use test_case::{self, TestCaseMethods};
-use traits;
+use traits::{self, Oracle};
 
 /// The messages that can be sent to the supervisor actor.
 #[derive(Debug)]
@@ -157,7 +157,7 @@ where
     exhausted_reducers: HashSet<ReducerId>,
     reduction_queue: ReductionQueue,
     interesting_counter: usize,
-    oracle: ReductionOracle,
+    oracle: oracle::InterestingRate,
 }
 
 impl<I> SupervisorActor<I>
@@ -188,7 +188,7 @@ where
             exhausted_reducers: HashSet::with_capacity(num_reducers),
             reduction_queue: ReductionQueue::with_capacity(num_reducers),
             interesting_counter: 0,
-            oracle: ReductionOracle::default(),
+            oracle: oracle::InterestingRate::default(),
         };
 
         supervisor.backup_original_test_case()?;

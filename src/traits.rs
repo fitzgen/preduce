@@ -1,6 +1,7 @@
 //! Interfaces and common behaviors.
 
 use error;
+use score;
 use std::fmt;
 use std::path;
 use test_case;
@@ -49,6 +50,26 @@ pub trait IsInteresting: Send {
     fn clone(&self) -> Box<IsInteresting>
     where
         Self: 'static;
+}
+
+/// An oracle observes the results of interesting-ness judgements of reductions
+/// and then predicts the interesting-ness of future reductions by scoring
+/// them. The resulting scores are ultimately used by the supervisor actor to
+/// prioritize and schedule work.
+pub trait Oracle: Send {
+    /// Tell the oracle that we found a new smallest interesting test case.
+    fn observe_smallest_interesting(&mut self, interesting: &test_case::Interesting);
+
+    /// Tell the oracle that we found a new interesting test case, but that it
+    /// is not the smallest.
+    fn observe_not_smallest_interesting(&mut self, interesting: &test_case::Interesting);
+
+    /// Tell the oracle that we found the given reduction unininteresting.
+    fn observe_not_interesting(&mut self, reduction: &test_case::PotentialReduction);
+
+    /// Ask the oracle's to score the given potential reduction, so we know how
+    /// to prioritize testing it.
+    fn predict(&mut self, reduction: &test_case::PotentialReduction) -> score::Score;
 }
 
 #[cfg(test)]

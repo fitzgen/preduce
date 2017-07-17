@@ -1,7 +1,7 @@
 //! The queue for reductions that haven't been tested yet.
 
 use actors::ReducerId;
-use oracle;
+use score;
 use std::cmp;
 use std::collections::BinaryHeap;
 use std::mem;
@@ -9,7 +9,7 @@ use std::ops;
 use test_case;
 
 #[derive(PartialEq, Eq)]
-struct QueuedReduction(test_case::PotentialReduction, ReducerId, oracle::Score);
+struct QueuedReduction(test_case::PotentialReduction, ReducerId, score::Score);
 
 impl PartialOrd for QueuedReduction {
     fn partial_cmp(&self, rhs: &QueuedReduction) -> Option<cmp::Ordering> {
@@ -52,7 +52,7 @@ impl ReductionQueue {
         &mut self,
         reduction: test_case::PotentialReduction,
         by: ReducerId,
-        priority: oracle::Score,
+        priority: score::Score,
     ) {
         self.reductions
             .push(QueuedReduction(reduction, by, priority));
