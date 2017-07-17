@@ -98,6 +98,20 @@ pub struct Script {
     strict: bool,
 }
 
+#[cfg(debug)]
+fn slurp<P: AsRef<path::Path>>(p: P) -> error::Result<Vec<u8>> {
+    let mut contents = Vec::new();
+    let mut file = fs::File::open(p)?;
+    file.read_to_end(&mut contents)?;
+    contents
+}
+
+#[cfg(not(debug))]
+#[inline(always)]
+fn slurp<P: AsRef<path::Path>>(_p: P) -> error::Result<()> {
+    Ok(())
+}
+
 impl Script {
     /// Construct a reducer script with the given `program`.
     pub fn new<S>(program: S) -> error::Result<Script>
@@ -178,6 +192,8 @@ impl Script {
     ) -> error::Result<Option<test_case::PotentialReduction>> {
         assert!(self.out_dir.is_some() && self.child.is_some() && self.child_stdout.is_some());
 
+        let before_seed_contents = slurp(self.seed.as_ref().unwrap().path())?;
+
         let temp_file = self.next_temp_file().or_else(|e| {
             self.kill_child();
             Err(e)
@@ -222,6 +238,15 @@ impl Script {
                 "'{}' did not generate a test case file at {}",
                 self.program.to_string_lossy(),
                 temp_file.path().display()
+            );
+            return Err(error::Error::MisbehavingReducerScript(details));
+        }
+
+        let after_seed_contents = slurp(self.seed.as_ref().unwrap().path())?;
+        if before_seed_contents != after_seed_contents {
+            let details = format!(
+                "seed file was modified while '{}' generated its next reduction",
+                self.program.to_string_lossy()
             );
             return Err(error::Error::MisbehavingReducerScript(details));
         }
