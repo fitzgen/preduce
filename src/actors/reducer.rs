@@ -141,6 +141,8 @@ impl ReducerActor {
     fn run_loop(mut self) {
         self.logger.spawned_reducer(self.me.id);
 
+        let mut seed = None;
+
         for msg in self.incoming {
             match msg {
                 ReducerMessage::Shutdown => {
@@ -148,6 +150,7 @@ impl ReducerActor {
                     return;
                 }
                 ReducerMessage::SetNewSeed(new_seed) => {
+                    seed = Some(new_seed.clone());
                     self.reducer.set_seed(new_seed);
                 }
                 ReducerMessage::RequestNextReduction => {
@@ -159,11 +162,13 @@ impl ReducerActor {
                             // Log the error and tell the supervisor we are out
                             // of reductions until the next seed test case.
                             self.logger.reducer_errored(self.me.id, e);
-                            self.supervisor.no_more_reductions(self.me.clone());
+                            self.supervisor
+                                .no_more_reductions(self.me.clone(), seed.clone().unwrap());
                         }
                         Ok(None) => {
                             self.logger.no_more_reductions(self.me.id);
-                            self.supervisor.no_more_reductions(self.me.clone());
+                            self.supervisor
+                                .no_more_reductions(self.me.clone(), seed.clone().unwrap());
                         }
                         Ok(Some(reduction)) => {
                             self.logger.finish_generating_next_reduction(self.me.id);

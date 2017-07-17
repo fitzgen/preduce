@@ -30,7 +30,8 @@ enum SupervisorMessage {
 
     // From reducers.
     ReducerPanicked(ReducerId, Box<Any + Send + 'static>),
-    ReplyNextReduction(Reducer, Option<test_case::PotentialReduction>),
+    ReplyNextReduction(Reducer, test_case::PotentialReduction),
+    ReplyExhausted(Reducer, test_case::Interesting),
 }
 
 /// A client handle to the supervisor actor.
@@ -123,9 +124,9 @@ impl Supervisor {
 
     /// Tell the supervisor that there are no more reductions of the current
     /// test case.
-    pub fn no_more_reductions(&self, reducer: Reducer) {
+    pub fn no_more_reductions(&self, reducer: Reducer, seed: test_case::Interesting) {
         self.sender
-            .send(SupervisorMessage::ReplyNextReduction(reducer, None))
+            .send(SupervisorMessage::ReplyExhausted(reducer, seed))
             .unwrap();
     }
 
@@ -133,10 +134,7 @@ impl Supervisor {
     /// case.
     pub fn reply_next_reduction(&self, reducer: Reducer, reduction: test_case::PotentialReduction) {
         self.sender
-            .send(SupervisorMessage::ReplyNextReduction(
-                reducer,
-                Some(reduction),
-            ))
+            .send(SupervisorMessage::ReplyNextReduction(reducer, reduction))
             .unwrap();
     }
 }
@@ -256,12 +254,66 @@ where
                     return Err(error::Error::ReducerActorPanicked);
                 }
 
-                SupervisorMessage::ReplyNextReduction(reducer, None) => {
+                SupervisorMessage::ReplyExhausted(reducer, seed) => {
                     assert!(self.reducers.contains_key(&reducer.id()));
-                    self.exhausted_reducers.insert(reducer.id());
+
+                    // If the seed whose reductions are exhausted is our current
+                    // smallest, then the reducer really is exhausted. If it
+                    // isn't the current smallest interesting test case, then
+                    // the following sequence of events happened:
+                    //
+                    // * We sent a message requesting the reducer's next
+                    //   reduction
+                    // * While waiting for its response, we received a new
+                    //   interesting test case, and it became our new smallest.
+                    // * Because we discovered a new smallest interesting test
+                    //   case, we sent reseed messages to every reducer,
+                    //   including the reducer we just sent a request to.
+                    // * At the same time, it sent back a reply to the original
+                    //   request, stating that its reductions are exhausted.
+                    //
+                    // Worker           Supervisor            Reducer
+                    //   |                  |                    |
+                    //   |                  |\                   |
+                    //   |\ interesting     | \ request          |
+                    //   | \                |  \ next            |
+                    //   |  `---------------|   \ reduction      |
+                    //   |                  |    \               |
+                    //   |                  |     \              |
+                    //   |                  |      `-------------|
+                    //   |                  |\                   |
+                    //   |                  | \ reseed           |
+                    //   |                  |  \                /|
+                    //   |                  |   \    exhausted / |
+                    //   |                  |    \            /  |
+                    //   |                  |     \          /   |
+                    //   |                  |      \        /    |
+                    //   |                  |       \      /     |
+                    //   |                  |        \    /      |
+                    //   |                  |         \  /       |
+                    //   |                  |          \/        |
+                    //   |                  |          /\        |
+                    //   |                  |         /  \       |
+                    //   |                  |        /    \      |
+                    //   |                  |-------'      `-----|
+                    //   |                  |                    |
+                    //
+                    // Therefore, if the seed that was exhausted is not our
+                    // current smallest, than the reducer is not actually
+                    // exhuasted, and is in the process of reseeding
+                    // itself. Additionally, we need to re-request its next
+                    // newly reseeded reduction; we usually do that for
+                    // exhausted reducers when sending the initial reseed
+                    // message, but didn't for this one because it wasn't in the
+                    // exhausted set at that time.
+                    if seed == smallest_interesting {
+                        self.exhausted_reducers.insert(reducer.id());
+                    } else {
+                        reducer.request_next_reduction();
+                    }
                 }
 
-                SupervisorMessage::ReplyNextReduction(reducer, Some(reduction)) => {
+                SupervisorMessage::ReplyNextReduction(reducer, reduction) => {
                     assert!(self.reducers.contains_key(&reducer.id()));
                     debug_assert!(self.repo.find_object(reduction.parent(), None).is_ok());
 

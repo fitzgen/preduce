@@ -239,7 +239,7 @@ impl PotentialReduction {
 }
 
 /// A test case that has been verified to be interesting.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Interesting {
     /// The kind of interesting test case.
     kind: InterestingKind,
@@ -316,7 +316,7 @@ impl Interesting {
 }
 
 /// An enumeration of the kinds of interesting test cases.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum InterestingKind {
     /// The initial interesting test case.
     Initial(InitialInteresting),
@@ -351,7 +351,7 @@ impl TestCaseMethods for InterestingKind {
 
 /// The initial test case, after it has been validated to have passed the
 /// is-interesting test.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct InitialInteresting {
     /// The path to the initial test case file.
     test_case: TempFile,
