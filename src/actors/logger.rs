@@ -398,7 +398,15 @@ impl Logger {
             "not intrstng"
         );
         println!("{:-<85}", "");
+
+        let mut total_smallest = 0;
+        let mut total_not_smallest = 0;
+        let mut total_not_interesting = 0;
         for (ref reducer, (smallest, not_smallest, not_interesting)) in stats {
+            total_smallest += smallest;
+            total_not_smallest += not_smallest;
+            total_not_interesting += not_interesting;
+
             // Take the last 50 characters of the reducer name, not the first
             // 50.
             let reducer: String = reducer
@@ -416,6 +424,15 @@ impl Logger {
                 not_interesting
             );
         }
+
+        println!("{:-<85}", "");
+        println!(
+            "{:<50.50} {:>10}  {:>10}  {:>10}",
+            "total",
+            total_smallest,
+            total_not_smallest,
+            total_not_interesting
+        );
         println!("{:=<85}", "");
     }
 }
