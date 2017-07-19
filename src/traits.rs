@@ -71,6 +71,9 @@ pub trait Oracle: Send {
     /// Tell the oracle that we found the given reduction unininteresting.
     fn observe_not_interesting(&mut self, reduction: &test_case::PotentialReduction);
 
+    /// Tell the oracle that the reducer with the given name has been exhausted.
+    fn observe_exhausted(&mut self, reducer_name: &str);
+
     /// Ask the oracle's to score the given potential reduction, so we know how
     /// to prioritize testing it.
     fn predict(&mut self, reduction: &test_case::PotentialReduction) -> score::Score;

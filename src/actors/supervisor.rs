@@ -154,6 +154,7 @@ where
     workers: HashMap<WorkerId, Worker>,
     idle_workers: Vec<Worker>,
     reducers: HashMap<ReducerId, Reducer>,
+    reducer_names: HashMap<ReducerId, String>,
     exhausted_reducers: HashSet<ReducerId>,
     reduction_queue: ReductionQueue,
     interesting_counter: usize,
@@ -185,6 +186,7 @@ where
             workers: HashMap::with_capacity(num_workers),
             idle_workers: Vec::with_capacity(num_workers),
             reducers: HashMap::with_capacity(num_reducers),
+            reducer_names: HashMap::with_capacity(num_reducers),
             exhausted_reducers: HashSet::with_capacity(num_reducers),
             reduction_queue: ReductionQueue::with_capacity(num_reducers),
             interesting_counter: 0,
@@ -307,6 +309,8 @@ where
                     // message, but didn't for this one because it wasn't in the
                     // exhausted set at that time.
                     if seed == smallest_interesting {
+                        self.oracle
+                            .observe_exhausted(&self.reducer_names[&reducer.id()]);
                         self.exhausted_reducers.insert(reducer.id());
                     } else {
                         reducer.request_next_reduction();
@@ -602,6 +606,7 @@ where
         let reducers = self.opts.take_reducers();
         for (i, reducer) in reducers.into_iter().enumerate() {
             let id = ReducerId::new(i);
+            self.reducer_names.insert(id, reducer.name().to_string());
             let reducer_actor = Reducer::spawn(id, reducer, self.me.clone(), self.logger.clone())?;
             self.reducers.insert(id, reducer_actor);
             self.exhausted_reducers.insert(id);
