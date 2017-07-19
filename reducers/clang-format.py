@@ -17,7 +17,10 @@ def main():
 
     with open(out_file_path, "w") as out_file:
         try:
-            subprocess.check_call([clang_format, seed], stdout=out_file)
+            subprocess.check_call([clang_format,
+                                   "-style",
+                                   "{SpacesInAngles: true, IndentWidth: 0}",
+                                   seed], stdout=out_file)
         except:
             return
 
