@@ -664,6 +664,77 @@ where
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+enum DryState {
+    Reducing(u32),
+    Skipping(u32),
+}
+
+/// A reducer combinator that skips reductions the reducer (probably) already
+/// generated from the last seed.
+///
+/// When reseeded, if it was not already exhausted, then it skips the first `n`
+/// reductions that it already generated from the last seed, since they are most
+/// likely about the same as would be generated from the new seed.
+#[derive(Debug)]
+pub struct DontRepeatYourself<R> {
+    inner: R,
+    state: DryState,
+}
+
+impl<R> DontRepeatYourself<R> {
+    /// Construct a new `DontRepeatYourself` reducer.
+    pub fn new(inner: R) -> DontRepeatYourself<R> {
+        DontRepeatYourself {
+            inner,
+            state: DryState::Reducing(0),
+        }
+    }
+}
+
+impl<R> Reducer for DontRepeatYourself<R>
+where
+    R: Reducer,
+{
+    fn name(&self) -> Cow<str> {
+        self.inner.name()
+    }
+
+    fn set_seed(&mut self, seed: test_case::Interesting) {
+        self.inner.set_seed(seed);
+        let next_state = match self.state {
+            DryState::Reducing(0) |
+            DryState::Skipping(0) => DryState::Reducing(0),
+            DryState::Reducing(n) |
+            DryState::Skipping(n) => DryState::Skipping(n),
+        };
+        self.state = next_state;
+    }
+
+    fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
+        match self.state {
+            DryState::Skipping(n) => {
+                self.state = DryState::Reducing(0);
+                for _ in 0..n {
+                    self.inner.next_potential_reduction()?;
+                }
+            }
+            DryState::Reducing(ref mut n) => {
+                *n += 1;
+            }
+        }
+
+        match self.inner.next_potential_reduction() {
+            result @ Ok(None) |
+            result @ Err(_) => {
+                self.state = DryState::Reducing(0);
+                result
+            }
+            otherwise => otherwise,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

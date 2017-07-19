@@ -101,6 +101,7 @@ fn try_main() -> error::Result<()> {
         .unwrap()
         .map(|script| {
             let reducer = reducers::Script::new(script)?;
+            let reducer = reducers::DontRepeatYourself::new(reducer);
             let reducer = reducers::Fuse::new(reducer);
             let mut reducer = Box::new(reducer) as Box<traits::Reducer>;
 
