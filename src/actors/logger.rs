@@ -378,7 +378,11 @@ impl Logger {
         stats.sort_by(|&(_, s), &(_, t)| {
             use std::cmp::Ordering;
             match (s.0.cmp(&t.0), s.1.cmp(&t.1), s.2.cmp(&t.2)) {
-                (Ordering::Equal, Ordering::Equal, o) |
+                // Sort by most useful to least, so invert the ordering of the
+                // `not_interesting` part of the tuple.
+                (Ordering::Equal, Ordering::Equal, Ordering::Equal) => Ordering::Equal,
+                (Ordering::Equal, Ordering::Equal, Ordering::Less) => Ordering::Greater,
+                (Ordering::Equal, Ordering::Equal, Ordering::Greater) => Ordering::Less,
                 (Ordering::Equal, o, _) |
                 (o, _, _) => o,
             }
