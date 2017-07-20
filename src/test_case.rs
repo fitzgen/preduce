@@ -313,6 +313,15 @@ impl Interesting {
     pub fn commit_id(&self) -> git2::Oid {
         self.commit_id
     }
+
+    /// Get this interesting test case's parent interesting test case's commit
+    /// id. Returns `None` if this is the initial interesting test case.
+    pub fn parent(&self) -> Option<git2::Oid> {
+        match self.kind {
+            InterestingKind::Initial(_) => None,
+            InterestingKind::Reduction(ref r) => Some(r.parent()),
+        }
+    }
 }
 
 /// An enumeration of the kinds of interesting test cases.

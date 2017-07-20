@@ -466,7 +466,10 @@ where
         let new_size = interesting.size();
         let old_size = smallest_interesting.size();
 
-        if new_size < old_size {
+        // Allow not strictly smaller new "smallest" interesting test cases to
+        // allow reducers like clang-format to enable further reductions down
+        // the line, even if it technically adds indentation.
+        if new_size < old_size || interesting.parent() == Some(smallest_interesting.commit_id()) {
             // We have a new globally smallest insteresting test case! First,
             // update the original test case file with the new interesting
             // reduction. The reduction process can take a LONG time, and if the
