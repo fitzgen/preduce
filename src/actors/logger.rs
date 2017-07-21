@@ -383,8 +383,7 @@ impl Logger {
                 (Ordering::Equal, Ordering::Equal, Ordering::Equal) => Ordering::Equal,
                 (Ordering::Equal, Ordering::Equal, Ordering::Less) => Ordering::Greater,
                 (Ordering::Equal, Ordering::Equal, Ordering::Greater) => Ordering::Less,
-                (Ordering::Equal, o, _) |
-                (o, _, _) => o,
+                (Ordering::Equal, o, _) | (o, _, _) => o,
             }
         });
         stats.reverse();

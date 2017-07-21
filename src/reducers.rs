@@ -655,8 +655,7 @@ where
 
         match self.reducer.next_potential_reduction() {
             result @ Ok(Some(_)) => result,
-            result @ Ok(None) |
-            result @ Err(_) => {
+            result @ Ok(None) | result @ Err(_) => {
                 self.finished = true;
                 result
             }
@@ -703,10 +702,8 @@ where
     fn set_seed(&mut self, seed: test_case::Interesting) {
         self.inner.set_seed(seed);
         let next_state = match self.state {
-            DryState::Reducing(0) |
-            DryState::Skipping(0) => DryState::Reducing(0),
-            DryState::Reducing(n) |
-            DryState::Skipping(n) => DryState::Skipping(n),
+            DryState::Reducing(0) | DryState::Skipping(0) => DryState::Reducing(0),
+            DryState::Reducing(n) | DryState::Skipping(n) => DryState::Skipping(n),
         };
         self.state = next_state;
     }
@@ -725,8 +722,7 @@ where
         }
 
         match self.inner.next_potential_reduction() {
-            result @ Ok(None) |
-            result @ Err(_) => {
+            result @ Ok(None) | result @ Err(_) => {
                 self.state = DryState::Reducing(0);
                 result
             }

@@ -441,8 +441,8 @@ mod tests {
             "The repo path should have a file now"
         );
 
-        let mut file = fs::File::open(&repo_test_case_path)
-            .expect("The repo test case file should open");
+        let mut file =
+            fs::File::open(&repo_test_case_path).expect("The repo test case file should open");
 
         let mut contents = String::new();
         file.read_to_string(&mut contents)
@@ -469,8 +469,8 @@ mod tests {
         let judge = |_: &path::Path| Ok(false);
         let judge = &judge;
 
-        let interesting = Interesting::initial(temp_file.path(), &judge, &repo)
-            .expect("should not error");
+        let interesting =
+            Interesting::initial(temp_file.path(), &judge, &repo).expect("should not error");
         assert!(interesting.is_none());
     }
 
