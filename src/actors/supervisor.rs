@@ -158,7 +158,11 @@ where
     exhausted_reducers: HashSet<ReducerId>,
     reduction_queue: ReductionQueue,
     interesting_counter: usize,
-    oracle: oracle::CreducePassPriorities,
+    oracle: oracle::Join3<
+        oracle::InterestingRate,
+        oracle::CreducePassPriorities,
+        oracle::PercentReduced,
+    >,
 }
 
 impl<I> SupervisorActor<I>
@@ -190,7 +194,7 @@ where
             exhausted_reducers: HashSet::with_capacity(num_reducers),
             reduction_queue: ReductionQueue::with_capacity(num_reducers),
             interesting_counter: 0,
-            oracle: oracle::CreducePassPriorities::default(),
+            oracle: Default::default(),
         };
 
         supervisor.backup_original_test_case()?;
