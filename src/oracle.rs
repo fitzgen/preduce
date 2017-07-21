@@ -242,7 +242,7 @@ impl traits::Oracle for CreducePassPriorities {
 
 /// An `Oracle` that scores potential reductions by how much they were able to
 /// shave off of the current smallest test case.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PercentReduced {
     smallest: Option<test_case::Interesting>,
 }
@@ -276,7 +276,7 @@ macro_rules! define_join_combinator {
         }
     ) => {
         /// Join multiple `Oracle`s into a single `Oracle` implementation.
-        #[derive(Debug)]
+        #[derive(Debug, Default)]
         pub struct $name < $( $generic , )+ > {
             $( $inner : $generic , )+
         }
