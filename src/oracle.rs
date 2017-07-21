@@ -240,3 +240,141 @@ impl traits::Oracle for CreducePassPriorities {
         Score::new(0.0)
     }
 }
+
+/// An `Oracle` that scores potential reductions by how much they were able to
+/// shave off of the current smallest test case.
+#[derive(Debug)]
+pub struct PercentReduced {
+    smallest: Option<test_case::Interesting>,
+}
+
+impl traits::Oracle for PercentReduced {
+    fn observe_smallest_interesting(&mut self, interesting: &test_case::Interesting) {
+        self.smallest = Some(interesting.clone());
+    }
+
+    fn observe_not_smallest_interesting(&mut self, _: &test_case::Interesting) {}
+    fn observe_not_interesting(&mut self, _: &test_case::PotentialReduction) {}
+    fn observe_exhausted(&mut self, _: &str) {}
+
+    fn predict(&mut self, reduction: &test_case::PotentialReduction) -> Score {
+        if let Some(ref smallest) = self.smallest {
+            if reduction.size() <= smallest.size() {
+                return Score::new(1.0 - (reduction.size() as f64 / smallest.size() as f64));
+            }
+        }
+
+        Score::new(0.0)
+    }
+}
+
+macro_rules! define_join_combinator {
+    (
+        $name:ident {
+            $(
+                $inner:ident : $generic:ident ,
+            )+
+        }
+    ) => {
+        /// Join multiple `Oracle`s into a single `Oracle` implementation.
+        #[derive(Debug)]
+        pub struct $name < $( $generic , )+ > {
+            $( $inner : $generic , )+
+        }
+
+        impl < $( $generic , )+ > $name < $( $generic , )+ > {
+            /// Construct a new joined `Oracle` from the given `Oracle`s.
+            pub fn new( $( $inner : $generic , )+ ) -> Self {
+                $name {
+                    $( $inner , )+
+                }
+            }
+        }
+
+        impl < $( $generic , )+ > traits::Oracle for $name < $( $generic , )+ >
+            where $( $generic : traits::Oracle , )+
+        {
+            fn observe_smallest_interesting(&mut self, interesting: &test_case::Interesting) {
+                $( self.$inner.observe_smallest_interesting(interesting); )+
+            }
+
+            fn observe_not_smallest_interesting(&mut self, interesting: &test_case::Interesting) {
+                $( self.$inner.observe_not_smallest_interesting(interesting); )+
+            }
+
+            fn observe_not_interesting(&mut self, reduction: &test_case::PotentialReduction) {
+                $( self.$inner.observe_not_interesting(reduction); )+
+            }
+
+            fn observe_exhausted(&mut self, reducer: &str) {
+                $( self.$inner.observe_exhausted(reducer); )+
+            }
+
+            fn predict(&mut self, reduction: &test_case::PotentialReduction) -> Score {
+                Score::new(0.0 $( + f64::from(self.$inner.predict(reduction)) )+ )
+            }
+        }
+    }
+}
+
+define_join_combinator! {
+    Join2 {
+        oracle1: T,
+        oracle2: U,
+    }
+}
+define_join_combinator! {
+    Join3 {
+        oracle1: T,
+        oracle2: U,
+        oracle3: V,
+    }
+}
+define_join_combinator! {
+    Join4 {
+        oracle1: T,
+        oracle2: U,
+        oracle3: V,
+        oracle4: W,
+    }
+}
+define_join_combinator! {
+    Join5 {
+        oracle1: T,
+        oracle2: U,
+        oracle3: V,
+        oracle4: W,
+        oracle5: X,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use score::Score;
+    use test_case;
+    use traits::Oracle;
+
+    struct Constant(Score);
+
+    impl traits::Oracle for Constant {
+        fn observe_smallest_interesting(&mut self, _: &test_case::Interesting) {}
+        fn observe_not_smallest_interesting(&mut self, _: &test_case::Interesting) {}
+        fn observe_not_interesting(&mut self, _: &test_case::PotentialReduction) {}
+        fn observe_exhausted(&mut self, _: &str) {}
+        fn predict(&mut self, _: &test_case::PotentialReduction) -> Score {
+            self.0
+        }
+    }
+
+    #[test]
+    fn test_joining_oracles() {
+        let mut joined = Join3::new(
+            Constant(Score::new(1.0)),
+            Constant(Score::new(2.0)),
+            Constant(Score::new(3.0)),
+        );
+        let reduction = test_case::PotentialReduction::testing_only_new();
+        assert_eq!(joined.predict(&reduction), Score::new(6.0));
+    }
+}

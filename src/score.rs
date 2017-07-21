@@ -20,6 +20,12 @@ impl Score {
     }
 }
 
+impl From<Score> for f64 {
+    fn from(s: Score) -> f64 {
+        s.0
+    }
+}
+
 impl Eq for Score {}
 
 impl Ord for Score {
