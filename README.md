@@ -1,11 +1,9 @@
-<center>
 **⚠ ⚠ ⚠**
 
 **This is very much an incomplete and work-in-progress prototype!! Any claims
 made below are likely false.**
 
 **⚠ ⚠ ⚠**
-</center>
 
 # `preduce`
 
