@@ -116,6 +116,7 @@ struct WorkerActor {
     supervisor: Supervisor,
     logger: Logger,
     repo: git::TempRepo,
+    tests_since_gc: usize,
 }
 
 impl fmt::Debug for WorkerActor {
@@ -193,6 +194,7 @@ impl WorkerActor {
             supervisor: supervisor,
             logger: logger,
             repo: repo,
+            tests_since_gc: 0,
         };
 
         let mut test = match worker.get_next_reduction(None) {
@@ -278,11 +280,16 @@ impl WorkerActor {
 
 impl Test {
     fn judge(
-        self,
+        mut self,
     ) -> error::Result<Either<Interesting, (WorkerActor, test_case::PotentialReduction)>> {
         let _signpost = signposts::WorkerJudgeInteresting::new();
 
         {
+            if self.worker.tests_since_gc > 20 {
+                self.worker.repo.gc()?;
+                self.worker.tests_since_gc = 0;
+            }
+            self.worker.tests_since_gc += 1;
             self.worker.repo.fetch_origin()?;
             let object = self.worker
                 .repo

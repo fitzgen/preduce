@@ -8,6 +8,7 @@ use std::fs;
 use std::ops;
 use std::path;
 use std::sync::Arc;
+use std::process::Stdio;
 use tempdir;
 
 /// The file name for test cases within a git repository.
@@ -48,6 +49,8 @@ pub trait RepoExt {
         first: git2::Oid,
         second: git2::Oid,
     ) -> error::Result<Option<git2::Oid>>;
+
+    fn gc(&self) -> error::Result<()>;
 }
 
 impl RepoExt for git2::Repository {
@@ -154,6 +157,16 @@ impl RepoExt for git2::Repository {
         let commit_id = self.commit(Some("HEAD"), &sig, &sig, "merge", &tree, &parents[..])?;
         self.checkout_head(Some(git2::build::CheckoutBuilder::new().force()))?;
         Ok(Some(commit_id))
+    }
+
+    fn gc(&self) -> error::Result<()> {
+        ::std::process::Command::new("git")
+            .args(&["gc"])
+            .current_dir(self.path())
+            .stderr(Stdio::null())
+            .stdout(Stdio::null())
+            .spawn()?.wait()?;
+        Ok(())
     }
 }
 
