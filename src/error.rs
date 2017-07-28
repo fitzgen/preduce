@@ -34,6 +34,9 @@ pub enum Error {
 
     /// There is no file at the given path, when we expected one.
     DoesNotExist(path::PathBuf),
+
+    /// Running `git gc` on a repository failed.
+    GitGcFailed,
 }
 
 impl fmt::Display for Error {
@@ -58,6 +61,7 @@ impl fmt::Display for Error {
             Error::DoesNotExist(ref file_path) => {
                 write!(f, "The file does not exist: {}", file_path.display())
             }
+            Error::GitGcFailed => write!(f, "Running `git gc` on a repository failed"),
         }
     }
 }
@@ -75,6 +79,7 @@ impl error::Error for Error {
                 "The initial test case did not pass the is-interesting predicate"
             }
             Error::DoesNotExist(_) => "There is no file at the given path, but we expected one",
+            Error::GitGcFailed => "Running `git gc` on a repository failed",
         }
     }
 }

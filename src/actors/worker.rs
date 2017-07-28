@@ -56,6 +56,7 @@ impl Worker {
         supervisor: Supervisor,
         logger: Logger,
         upstream: &path::Path,
+        git_gc_threshold: usize,
     ) -> error::Result<Worker> {
         logger.spawning_worker(id);
 
@@ -71,7 +72,8 @@ impl Worker {
         thread::Builder::new()
             .name(format!("preduce-worker-{}", id))
             .spawn(move || {
-                WorkerActor::run(id, me2, predicate, receiver, supervisor, logger, upstream);
+                WorkerActor::run(id, me2, predicate, receiver, supervisor, logger, upstream,
+                                 git_gc_threshold);
             })?;
 
         Ok(me)
@@ -116,6 +118,7 @@ struct WorkerActor {
     supervisor: Supervisor,
     logger: Logger,
     repo: git::TempRepo,
+    git_gc_threshold: usize,
     tests_since_gc: usize,
 }
 
@@ -154,12 +157,14 @@ impl WorkerActor {
         supervisor: Supervisor,
         logger: Logger,
         upstream: path::PathBuf,
+        git_gc_threshold: usize,
     ) {
         match {
             let supervisor2 = supervisor.clone();
             let logger2 = logger.clone();
             panic::catch_unwind(panic::AssertUnwindSafe(move || {
-                WorkerActor::try_run(id, me, predicate, incoming, supervisor2, logger2, upstream)
+                WorkerActor::try_run(id, me, predicate, incoming, supervisor2, logger2, upstream,
+                                     git_gc_threshold)
             }))
         } {
             Err(p) => {
@@ -180,6 +185,7 @@ impl WorkerActor {
         supervisor: Supervisor,
         logger: Logger,
         upstream: path::PathBuf,
+        git_gc_threshold: usize,
     ) -> error::Result<()> {
         logger.spawned_worker(id);
 
@@ -194,6 +200,7 @@ impl WorkerActor {
             supervisor: supervisor,
             logger: logger,
             repo: repo,
+            git_gc_threshold: git_gc_threshold,
             tests_since_gc: 0,
         };
 
@@ -285,7 +292,7 @@ impl Test {
         let _signpost = signposts::WorkerJudgeInteresting::new();
 
         {
-            if self.worker.tests_since_gc > 20 {
+            if self.worker.tests_since_gc > self.worker.git_gc_threshold {
                 self.worker.repo.gc()?;
                 self.worker.tests_since_gc = 0;
             }

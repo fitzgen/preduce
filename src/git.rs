@@ -160,12 +160,15 @@ impl RepoExt for git2::Repository {
     }
 
     fn gc(&self) -> error::Result<()> {
-        ::std::process::Command::new("git")
-            .args(&["gc"])
+        let status = ::std::process::Command::new("git")
+            .arg("gc")
             .current_dir(self.path())
             .stderr(Stdio::null())
             .stdout(Stdio::null())
-            .spawn()?.wait()?;
+            .status()?;
+        if !status.success() {
+            return Err(error::Error::GitGcFailed);
+        }
         Ok(())
     }
 }

@@ -163,6 +163,7 @@ where
         oracle::CreducePassPriorities,
         oracle::PercentReduced,
     >,
+    resets_since_gc: usize,
 }
 
 impl<I> SupervisorActor<I>
@@ -195,6 +196,7 @@ where
             reduction_queue: ReductionQueue::with_capacity(num_reducers),
             interesting_counter: 0,
             oracle: Default::default(),
+            resets_since_gc: 0,
         };
 
         supervisor.backup_original_test_case()?;
@@ -496,6 +498,11 @@ where
                 let commit = self.repo.head_commit()?;
                 self.repo
                     .tag(&tag_name, commit.as_object(), &git::signature(), "", false)?;
+                if self.resets_since_gc > self.opts.git_gc_threshold {
+                    self.repo.gc()?;
+                    self.resets_since_gc = 0;
+                }
+                self.resets_since_gc += 1;
             }
 
             // Third, re-seed our reducer actors with the new test case, and
@@ -599,6 +606,7 @@ where
                     self.me.clone(),
                     self.logger.clone(),
                     self.repo.path(),
+                    self.opts.git_gc_threshold,
                 )?;
                 Ok((id, worker))
             })
