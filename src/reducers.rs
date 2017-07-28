@@ -171,8 +171,7 @@ impl Script {
     fn shutdown_child(&mut self) {
         if let Some(mut child) = self.child.take() {
             if {
-                let mut child_stdin = child.stdin.as_mut().unwrap();
-                write!(child_stdin, "\n").is_err()
+                write!(child.stdin.as_mut().unwrap(), "\n").and_then(|_| child.wait()).is_err()
             } {
                 self.kill_child();
             }
