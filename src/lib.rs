@@ -37,6 +37,8 @@ mod test_utils;
 use std::mem;
 use std::path;
 
+const DEFAULT_GIT_GC_THRESHOLD: usize = 20;
+
 /// A builder to configure a `preduce` run's options, and finally start the
 /// reduction process.
 ///
@@ -65,6 +67,7 @@ where
     reducers: Vec<Box<traits::Reducer>>,
     workers: usize,
     try_merging: bool,
+    git_gc_threshold: usize,
 }
 
 /// APIs for configuring options and spawning the reduction process.
@@ -108,6 +111,7 @@ where
             reducers: reducers,
             workers: num_cpus::get(),
             try_merging: true,
+            git_gc_threshold: DEFAULT_GIT_GC_THRESHOLD,
         }
     }
 
@@ -159,6 +163,13 @@ where
     /// ```
     pub fn try_merging(mut self, should_try_merging: bool) -> Options<I> {
         self.try_merging = should_try_merging;
+        self
+    }
+
+    /// Sets the number of git operations performed on a repository before
+    /// running `git gc`. This prevents runaway repository size.
+    pub fn git_gc_threshold(mut self, git_gc_threshold: usize) -> Options<I> {
+        self.git_gc_threshold = git_gc_threshold;
         self
     }
 
