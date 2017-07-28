@@ -107,11 +107,10 @@ def topformflat_reducer(seed, flatten):
     if topformflat is None:
         return
 
-    with tempfile.NamedTemporaryFile(mode="w+", delete=False) as tmp_file:
+    with tempfile.NamedTemporaryFile(mode="w+") as tmp_file:
         with open(seed, "r") as in_file:
             subprocess.check_call([topformflat, str(flatten)], stdin=in_file, stdout=tmp_file)
-
-    chunking_reducer(tmp_file.name)
+        chunking_reducer(tmp_file.name)
 
 def clex_reducer(seed, clex_command):
     clex = get_clex()
