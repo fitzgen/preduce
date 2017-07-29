@@ -165,6 +165,21 @@ impl Script {
         Ok(())
     }
 
+    /// Attempt to nicely tell the child to stop by sending it an empty line to
+    /// use as the next "seed", whereupon it should exit cleanly, thus cleaning
+    /// up any resources it was using (e.g. temporary files).
+    fn shutdown_child(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            if {
+                write!(child.stdin.as_mut().unwrap(), "\n").and_then(|_| child.wait()).is_err()
+            } {
+                self.kill_child();
+            }
+            self.child_stdout = None;
+            self.out_dir = None;
+        }
+    }
+
     fn kill_child(&mut self) {
         if let Some(mut child) = self.child.take() {
             let _ = child.kill();
@@ -289,10 +304,10 @@ impl Reducer for Script {
     fn set_seed(&mut self, seed: test_case::Interesting) {
         self.seed = Some(seed);
 
-        // If we have an extant child process, kill it now. We'll start a new
+        // If we have an extant child process, shut it down now. We'll start a new
         // child process with the new seed the next time
         // `next_potential_reduction` is invoked.
-        self.kill_child();
+        self.shutdown_child();
     }
 
     fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
