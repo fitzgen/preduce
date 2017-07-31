@@ -177,3 +177,35 @@ def clang_delta_reducer(seed, transformation):
             # backtraces from raising this exception would completely drown out
             # any useful information we are otherwise logging.
             return
+
+def regexp_matching_reducer(seed, regexp):
+    n = 0
+    found_nth_match = True
+
+    while found_nth_match:
+        # Read the test case path from stdin.
+        out_file_path = sys.stdin.readline().strip()
+        if out_file_path == "":
+            return
+
+        # Write a copy of the file without the n^th matching line.
+        i = 0
+        found_nth_match = False
+        with open(out_file_path, "w") as out_file:
+            with open(seed, "r") as in_file:
+                for line in in_file:
+                    if regexp.match(line.strip()):
+                        if i == n:
+                            found_nth_match = True
+                            continue
+                        i += 1
+                    out_file.write(line)
+
+        n += 1
+        if not found_nth_match:
+            # No more matching lines to remove, time to return.
+            return
+
+        # Tell `preduce` we generated the reduction.
+        sys.stdout.write("\n")
+        sys.stdout.flush()
