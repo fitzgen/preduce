@@ -189,16 +189,16 @@ def regexp_matching_reducer(seed, regexp):
             return
 
         # Write a copy of the file without the n^th matching line.
-        i = 0
+        i = -1
         found_nth_match = False
         with open(out_file_path, "w") as out_file:
             with open(seed, "r") as in_file:
                 for line in in_file:
                     if regexp.match(line.strip()):
+                        i += 1
                         if i == n:
                             found_nth_match = True
                             continue
-                        i += 1
                     out_file.write(line)
 
         n += 1
