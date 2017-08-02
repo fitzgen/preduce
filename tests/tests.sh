@@ -92,6 +92,10 @@ test_preduce_run \
     ../reducers/*.py
 
 test_reducer \
+    ../reducers/blank.py \
+    fixtures/wow.cpp \
+    expectations/blank-*
+test_reducer \
     ../reducers/chunks.py \
     fixtures/lorem-ipsum.txt \
     expectations/chunks-*
@@ -111,6 +115,10 @@ test_reducer \
     ../reducers/clang-delta-remove-unused-outer-class.py \
     fixtures/wow.cpp \
     expectations/clang-delta-remove-unused-outer-class-0
+test_reducer \
+    ../reducers/includes.py \
+    fixtures/some-includes.cpp \
+    expectations/includes-*
 
 if [[ "$CI" == "false" ]]; then
     # For some reason this hangs in Travis CI...
