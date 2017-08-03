@@ -92,6 +92,26 @@ test_preduce_run \
     ../reducers/*.py
 
 test_reducer \
+    ../reducers/balanced-angle.py \
+    fixtures/nested-classes.cpp \
+    expectations/balanced-angle-*
+
+test_reducer \
+    ../reducers/balanced-curly.py \
+    fixtures/nested-classes.cpp \
+    expectations/balanced-curly-*
+
+test_reducer \
+    ../reducers/balanced-paren.py \
+    fixtures/some-includes.cpp \
+    expectations/balanced-paren-*
+
+test_reducer \
+    ../reducers/balanced-square.py \
+    fixtures/nested-classes.cpp \
+    expectations/balanced-square-*
+
+test_reducer \
     ../reducers/blank.py \
     fixtures/wow.cpp \
     expectations/blank-*

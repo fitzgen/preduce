@@ -1,0 +1,2 @@
+template<typename T, typename U, int N>
+class Nine {};
