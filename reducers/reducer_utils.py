@@ -209,3 +209,89 @@ def regexp_matching_reducer(seed, regexp):
         # Tell `preduce` we generated the reduction.
         sys.stdout.write("\n")
         sys.stdout.flush()
+
+class BalancedBracketFinder(object):
+    """Given source text and a bracket type tuple describing the opening
+    bracket character and closing bracket character, finds all pairs of
+    indices in the source text where, starting at the first index in the
+    pair and proceeding to the second index in the pair, the contents of
+    the source text is balanced with respect to the given bracket
+    type. As implemented this is essentially an O(n^2) algorithm. If
+    this ever becomes a problem, this could be reimplemented with a
+    stack to be O(n).
+    """
+    angle = ("<", ">")
+    curly = ("{", "}")
+    paren = ("(", ")")
+    square = ("[", "]")
+
+    def _find_next_pair_from(self, start_index):
+        """Given a start index (where there may or may not be an opening
+        bracket), finds and returns the index of next opening bracket
+        and its corresponding balanced closing bracket index, if such a
+        pair exists (returns None otherwise).
+        """
+        depth = 0
+        opening_index = None
+        closing_index = None
+        for index in xrange(start_index, len(self._source)):
+            if self._source[index] == self._opening_bracket:
+                if not opening_index:
+                    opening_index = index
+                depth = depth + 1
+            elif depth > 0 and self._source[index] == self._closing_bracket:
+                depth = depth - 1
+                if depth == 0:
+                    closing_index = index
+                    return (opening_index, closing_index)
+        return None
+
+    def __init__(self, source, bracket_tuple):
+        self._source = source
+        self._index = 0
+        (self._opening_bracket, self._closing_bracket) = bracket_tuple
+
+    def find_next_pair(self):
+        """Finds the next (opening bracket index, closing bracket index)
+        pair. Returns None if no more exist.
+        """
+        if self._index >= len(self._source):
+            return None
+        next_pair = self._find_next_pair_from(self._index)
+        if not next_pair:
+            self._index = len(self._source)
+            return None
+        self._index = next_pair[0] + 1
+        return next_pair
+
+
+def balanced_reducer(seed, bracket_type):
+    with open(seed, "r") as in_file:
+        contents = in_file.read()
+    bracket_finder = BalancedBracketFinder(contents, bracket_type)
+    indices = bracket_finder.find_next_pair()
+    while indices:
+        out_file_path = sys.stdin.readline().strip()
+        if out_file_path == "":
+            return
+        with open(out_file_path, "w") as out_file:
+            # Generate a reduction by removing the entire range
+            # (brackets included)
+            out_file.write(contents[0:indices[0]] + contents[indices[1] + 1:])
+        # Tell `preduce` we generated the reduction.
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+
+        out_file_path = sys.stdin.readline().strip()
+        if out_file_path == "":
+            return
+        # Generate a reduction by removing the contents of the range
+        # (brackets not included). This doesn't make much sense if the
+        # range is (n, n + 1), so filter out that case.
+        if indices[0] + 1 < indices[1]:
+            with open(out_file_path, "w") as out_file:
+                out_file.write(contents[0:indices[0] + 1] + contents[indices[1]:])
+            # Tell `preduce` we generated the reduction.
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+        indices = bracket_finder.find_next_pair()
