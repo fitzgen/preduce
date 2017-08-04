@@ -282,13 +282,13 @@ def balanced_reducer(seed, bracket_type):
         sys.stdout.write("\n")
         sys.stdout.flush()
 
-        out_file_path = sys.stdin.readline().strip()
-        if out_file_path == "":
-            return
         # Generate a reduction by removing the contents of the range
         # (brackets not included). This doesn't make much sense if the
         # range is (n, n + 1), so filter out that case.
         if indices[0] + 1 < indices[1]:
+            out_file_path = sys.stdin.readline().strip()
+            if out_file_path == "":
+                return
             with open(out_file_path, "w") as out_file:
                 out_file.write(contents[0:indices[0] + 1] + contents[indices[1]:])
             # Tell `preduce` we generated the reduction.
