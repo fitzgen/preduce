@@ -20,6 +20,11 @@ pub trait TestCaseMethods: Into<TempFile> {
     /// Get the size (in bytes) of this test case.
     fn size(&self) -> u64;
 
+    /// Get the delta size (in bytes) of this test case, compared to its parent
+    /// test case that it was produced from. Or, in the case of the initial
+    /// interesting test case, 0.
+    fn delta(&self) -> u64;
+
     /// Get the provenance of this test case.
     fn provenance(&self) -> &str;
 }
@@ -142,6 +147,9 @@ pub struct PotentialReduction {
 
     /// The size of the test case file, in bytes.
     size: u64,
+
+    /// The delta size from the parent test case.
+    delta: u64,
 }
 
 impl TestCaseMethods for PotentialReduction {
@@ -151,6 +159,10 @@ impl TestCaseMethods for PotentialReduction {
 
     fn size(&self) -> u64 {
         self.size
+    }
+
+    fn delta(&self) -> u64 {
+        self.delta
     }
 
     fn provenance(&self) -> &str {
@@ -189,6 +201,7 @@ impl PotentialReduction {
             parent: seed.commit_id(),
             test_case: test_case,
             size: size,
+            delta: seed.size().saturating_sub(size),
         })
     }
 
@@ -255,6 +268,10 @@ impl TestCaseMethods for Interesting {
 
     fn size(&self) -> u64 {
         self.kind.size()
+    }
+
+    fn delta(&self) -> u64 {
+        self.kind.delta()
     }
 
     fn provenance(&self) -> &str {
@@ -350,6 +367,13 @@ impl TestCaseMethods for InterestingKind {
         }
     }
 
+    fn delta(&self) -> u64 {
+        match *self {
+            InterestingKind::Initial(ref initial) => initial.delta(),
+            InterestingKind::Reduction(ref reduction) => reduction.delta(),
+        }
+    }
+
     fn provenance(&self) -> &str {
         match *self {
             InterestingKind::Initial(ref i) => i.provenance(),
@@ -378,6 +402,10 @@ impl TestCaseMethods for InitialInteresting {
         self.size
     }
 
+    fn delta(&self) -> u64 {
+        0
+    }
+
     fn provenance(&self) -> &str {
         "<initial>"
     }
@@ -391,6 +419,7 @@ impl PotentialReduction {
             parent: git2::Oid::from_bytes(&[0; 20]).unwrap(),
             test_case: TempFile::anonymous().unwrap(),
             size: 0,
+            delta: 0,
         }
     }
 }

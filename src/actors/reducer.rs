@@ -171,7 +171,7 @@ impl ReducerActor {
                                 .no_more_reductions(self.me.clone(), seed.clone().unwrap());
                         }
                         Ok(Some(reduction)) => {
-                            self.logger.finish_generating_next_reduction(self.me.id);
+                            self.logger.finish_generating_next_reduction(self.me.id, reduction.clone());
                             self.supervisor
                                 .reply_next_reduction(self.me.clone(), reduction);
                         }

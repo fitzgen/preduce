@@ -485,8 +485,7 @@ where
             fs::copy(smallest_interesting.path(), &self.opts.test_case)?;
             self.oracle
                 .observe_smallest_interesting(&smallest_interesting);
-            let provenance = smallest_interesting.provenance().into();
-            self.logger.new_smallest(new_size, orig_size, provenance);
+            self.logger.new_smallest(smallest_interesting.clone(), orig_size);
 
             // Second, reset our repo's HEAD to the new interesting test case's
             // commit.
@@ -539,7 +538,7 @@ where
             // even smaller than both our current smallest and the
             // interesting-but-not-smaller test case.
             self.oracle.observe_not_smallest_interesting(&interesting);
-            self.logger.is_not_smaller(interesting.provenance().into());
+            self.logger.is_not_smaller(interesting);
             if self.opts.should_try_merging() {
                 who.try_merge(old_size, self.repo.head_id()?);
             } else {

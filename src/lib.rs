@@ -16,6 +16,7 @@
 extern crate either;
 extern crate fixedbitset;
 extern crate git2;
+extern crate histo;
 extern crate tempdir;
 extern crate num_cpus;
 

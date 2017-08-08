@@ -308,23 +308,22 @@ impl Test {
             )?;
         }
 
-        self.worker.logger.start_judging_interesting(self.worker.id);
+        self.worker.logger.start_judging_interesting(self.worker.id, self.reduction.clone());
         match self.reduction
             .into_interesting(&self.worker.predicate, &self.worker.repo)? {
             Left(interesting) => {
                 self.worker
                     .logger
-                    .judged_interesting(self.worker.id, interesting.size());
+                    .judged_interesting(self.worker.id, interesting.clone());
                 Ok(Left(Interesting {
                     worker: self.worker,
                     interesting: interesting,
                 }))
             }
             Right(not_interesting) => {
-                let provenance = not_interesting.provenance().into();
                 self.worker
                     .logger
-                    .judged_not_interesting(self.worker.id, provenance);
+                    .judged_not_interesting(self.worker.id, not_interesting.clone());
                 Ok(Right((self.worker, not_interesting)))
             }
         }
