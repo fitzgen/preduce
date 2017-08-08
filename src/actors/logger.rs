@@ -351,7 +351,7 @@ impl Logger {
         // Reduction provenance -> (new smallest interesting,
         //                          interesting-but-not-smallest,
         //                          not interesting)
-        let mut stats: BTreeMap<String, (Histogram, Histogram, Histogram)> = BTreeMap::new();
+        let mut by_provenance: BTreeMap<String, (Histogram, Histogram, Histogram)> = BTreeMap::new();
 
         // Histograms of various kinds of reductions' sizes.
         let mut all_reductions = Histogram::with_buckets(BUCKETS);
@@ -387,7 +387,7 @@ impl Logger {
                     );
 
                     let provenance = interesting.provenance().to_string();
-                    stats.entry(provenance)
+                    by_provenance.entry(provenance)
                         .or_insert_with(|| (Histogram::with_buckets(BUCKETS),
                                             Histogram::with_buckets(BUCKETS),
                                             Histogram::with_buckets(BUCKETS)))
@@ -401,7 +401,7 @@ impl Logger {
 
                 LoggerMessage::IsNotSmaller(interesting) => {
                     let provenance = interesting.provenance().to_string();
-                    stats.entry(provenance)
+                    by_provenance.entry(provenance)
                         .or_insert_with(|| (Histogram::with_buckets(BUCKETS),
                                             Histogram::with_buckets(BUCKETS),
                                             Histogram::with_buckets(BUCKETS)))
@@ -415,7 +415,7 @@ impl Logger {
 
                 LoggerMessage::JudgedNotInteresting(_, reduction) => {
                     let provenance = reduction.provenance().to_string();
-                    stats.entry(provenance)
+                    by_provenance.entry(provenance)
                         .or_insert_with(|| (Histogram::with_buckets(BUCKETS),
                                             Histogram::with_buckets(BUCKETS),
                                             Histogram::with_buckets(BUCKETS)))
@@ -428,7 +428,7 @@ impl Logger {
 
                 LoggerMessage::FinishedMerging(_, merged_size, upstream_size)
                     if merged_size >= upstream_size => {
-                        stats.entry("merge".into())
+                        by_provenance.entry("merge".into())
                             .or_insert_with(|| (Histogram::with_buckets(BUCKETS),
                                                 Histogram::with_buckets(BUCKETS),
                                                 Histogram::with_buckets(BUCKETS)))
@@ -442,8 +442,8 @@ impl Logger {
         println!("Final size is {}", smallest_size);
         println!();
 
-        let mut stats: Vec<_> = stats.into_iter().collect();
-        stats.sort_by(|&(_, ref s), &(_, ref t)| {
+        let mut by_provenance: Vec<_> = by_provenance.into_iter().collect();
+        by_provenance.sort_by(|&(_, ref s), &(_, ref t)| {
             use std::cmp::Ordering;
             match (sum(&s.0).cmp(&sum(&t.0)), sum(&s.1).cmp(&sum(&t.1)), sum(&s.2).cmp(&sum(&t.2))) {
                 // Sort by most useful to least, so invert the ordering of the
@@ -454,7 +454,7 @@ impl Logger {
                 (Ordering::Equal, o, _) | (o, _, _) => o,
             }
         });
-        stats.reverse();
+        by_provenance.reverse();
 
         println!("{:=<85}", "");
         println!(
@@ -469,7 +469,7 @@ impl Logger {
         let mut total_smallest = 0;
         let mut total_not_smallest = 0;
         let mut total_not_interesting = 0;
-        for &(ref reducer, (ref smallest, ref not_smallest, ref not_interesting)) in &stats {
+        for &(ref reducer, (ref smallest, ref not_smallest, ref not_interesting)) in &by_provenance {
             let smallest = sum(smallest);
             let not_smallest = sum(not_smallest);
             let not_interesting = sum(not_interesting);
@@ -525,7 +525,7 @@ impl Logger {
         println!("Not interesting reductions' delta sizes:");
         println!("{}", not_interesting_reductions);
 
-        for (reducer, (smallest, not_smallest, not_interesting)) in stats {
+        for (reducer, (smallest, not_smallest, not_interesting)) in by_provenance {
             println!("{:=<85}", "");
             println!("{}: smallest interesting reductions' delta sizes:", reducer);
             println!("{}", smallest);
