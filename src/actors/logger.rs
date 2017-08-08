@@ -360,6 +360,11 @@ impl Logger {
         let mut any_interesting_reductions = Histogram::with_buckets(BUCKETS);
         let mut not_interesting_reductions = Histogram::with_buckets(BUCKETS);
 
+        // Histograms for rates of interesting-ness.
+        let mut smallest_rate = Histogram::with_buckets(2);
+        let mut not_smallest_rate = Histogram::with_buckets(2);
+        let mut any_interesting_rate = Histogram::with_buckets(2);
+
         for log_msg in incoming {
             writeln!(&mut to, "{}", log_msg).expect("Should write to log file");
 
@@ -397,6 +402,10 @@ impl Logger {
                     all_reductions.add(interesting.delta());
                     smallest_reductions.add(interesting.delta());
                     any_interesting_reductions.add(interesting.delta());
+
+                    smallest_rate.add(1);
+                    not_smallest_rate.add(0);
+                    any_interesting_rate.add(1);
                 }
 
                 LoggerMessage::IsNotSmaller(interesting) => {
@@ -411,6 +420,10 @@ impl Logger {
                     all_reductions.add(interesting.delta());
                     not_smallest_reductions.add(interesting.delta());
                     any_interesting_reductions.add(interesting.delta());
+
+                    smallest_rate.add(0);
+                    not_smallest_rate.add(1);
+                    any_interesting_rate.add(1);
                 }
 
                 LoggerMessage::JudgedNotInteresting(_, reduction) => {
@@ -424,6 +437,10 @@ impl Logger {
 
                     all_reductions.add(reduction.delta());
                     not_interesting_reductions.add(reduction.delta());
+
+                    smallest_rate.add(0);
+                    not_smallest_rate.add(0);
+                    any_interesting_rate.add(0);
                 }
 
                 LoggerMessage::FinishedMerging(_, merged_size, upstream_size)
@@ -434,6 +451,10 @@ impl Logger {
                                                 Histogram::with_buckets(BUCKETS)))
                             .2
                             .add(0);
+
+                        smallest_rate.add(0);
+                        not_smallest_rate.add(0);
+                        any_interesting_rate.add(0);
                 }
                 _ => {}
             }
@@ -504,6 +525,18 @@ impl Logger {
             total_not_smallest,
             total_not_interesting
         );
+
+        println!("{:=<85}", "");
+        println!("Rate of smallest interesting (1 = smallest interesting):");
+        println!("{}", smallest_rate);
+
+        println!("{:=<85}", "");
+        println!("Rate of interesting-but-not-smallest (1 = interesting-but-not-smallest):");
+        println!("{}", not_smallest_rate);
+
+        println!("{:=<85}", "");
+        println!("Rate of interesting regardless if smallest (1 = interesting):");
+        println!("{}", any_interesting_rate);
 
         println!("{:=<85}", "");
         println!("All generated reductions' delta sizes, regardless their interesting-ness:");
