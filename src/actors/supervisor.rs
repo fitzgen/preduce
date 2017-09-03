@@ -1,7 +1,7 @@
 //! The supervisor actor manages workers, and brokers their access to new
 //! reductions.
 
-use super::{Logger, Reducer, ReducerId, Worker, WorkerId};
+use super::{Logger, Reducer, ReducerId, Sigint, Worker, WorkerId};
 use super::super::Options;
 use error;
 use git::{self, RepoExt};
@@ -32,6 +32,9 @@ enum SupervisorMessage {
     ReducerPanicked(ReducerId, Box<Any + Send + 'static>),
     ReplyNextReduction(Reducer, test_case::PotentialReduction),
     ReplyExhausted(Reducer, test_case::Interesting),
+
+    // From the SIGINT actor.
+    GotSigint,
 }
 
 /// A client handle to the supervisor actor.
@@ -137,6 +140,14 @@ impl Supervisor {
             .send(SupervisorMessage::ReplyNextReduction(reducer, reduction))
             .unwrap();
     }
+
+    // Messages sent to the supervisor from the SIGINT actor.
+
+    pub fn got_sigint(&self) {
+        self.sender
+            .send(SupervisorMessage::GotSigint)
+            .unwrap();
+    }
 }
 
 // Supervisor actor implementation.
@@ -149,6 +160,8 @@ where
     me: Supervisor,
     logger: Logger,
     logger_handle: thread::JoinHandle<()>,
+    sigint: Sigint,
+    sigint_handle: thread::JoinHandle<()>,
     repo: git::TempRepo,
     worker_id_counter: usize,
     workers: HashMap<WorkerId, Worker>,
@@ -180,12 +193,15 @@ where
         let num_workers = opts.num_workers();
         let num_reducers = opts.reducers().len();
         let (logger, logger_handle) = Logger::spawn(fs::File::create("preduce.log")?)?;
+        let (sigint, sigint_handle) = Sigint::spawn(me.clone(), logger.clone())?;
 
         let mut supervisor = SupervisorActor {
             opts: opts,
             me: me,
             logger: logger,
             logger_handle: logger_handle,
+            sigint: sigint,
+            sigint_handle: sigint_handle,
             repo: repo,
             worker_id_counter: 0,
             workers: HashMap::with_capacity(num_workers),
@@ -336,6 +352,13 @@ where
                         reducer.request_next_reduction();
                     }
                 }
+
+                SupervisorMessage::GotSigint => {
+                    for (_, worker) in self.workers.drain() {
+                        worker.shutdown();
+                    }
+                    return self.shutdown(smallest_interesting, orig_size);
+                }
             }
 
             // If all of our reducers are exhausted, and we are out of potential
@@ -372,6 +395,9 @@ where
 
         self.logger
             .final_reduced_size(smallest_interesting.size(), orig_size);
+
+        self.sigint.shutdown();
+        let _ = self.sigint_handle.join();
 
         // Tell all the reducer actors to shutdown, and then wait for them
         // finish their cleanup by joining the logger thread, which exits once

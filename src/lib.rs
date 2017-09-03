@@ -13,6 +13,7 @@
 #![deny(missing_debug_implementations)]
 #![deny(unsafe_code)]
 
+extern crate ctrlc;
 extern crate either;
 extern crate fixedbitset;
 extern crate git2;

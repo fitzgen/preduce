@@ -3,6 +3,7 @@ authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 description = "A parallel, language agnostic, automatic test case reducer."
 name = "preduce"
 version = "0.1.0"
+
 [[bin]]
 doc = false
 name = "preduce"
@@ -10,6 +11,7 @@ path = "src/bin/preduce.rs"
 
 [dependencies]
 clap = "2.23.1"
+ctrlc = "3.0.2"
 either = "1.1.0"
 fixedbitset = "0.1.6"
 git2 = "0.6.4"

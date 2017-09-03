@@ -38,6 +38,7 @@ enum LoggerMessage {
     FinalReducedSize(u64, u64),
     TryMerge(WorkerId, git2::Oid, git2::Oid),
     FinishedMerging(WorkerId, u64, u64),
+    GotSigint,
 }
 
 impl fmt::Display for LoggerMessage {
@@ -166,6 +167,9 @@ impl fmt::Display for LoggerMessage {
                         upstream_size
                     )
                 }
+            }
+            LoggerMessage::GotSigint => {
+                write!(f, "SIGINT actor: received SIGINT")
             }
         }
     }
@@ -331,6 +335,11 @@ impl Logger {
     /// Log that the reducer with the given id is shutting down.
     pub fn reducer_panicked(&self, id: ReducerId, panic: Box<Any + Send + 'static>) {
         let _ = self.sender.send(LoggerMessage::ReducerPanicked(id, panic));
+    }
+
+    /// Log that we received SIGINT.
+    pub fn got_sigint(&self) {
+        let _ = self.sender.send(LoggerMessage::GotSigint);
     }
 }
 
