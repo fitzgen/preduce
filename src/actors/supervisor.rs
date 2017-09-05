@@ -373,6 +373,7 @@ where
                     for (_, worker) in self.workers.drain() {
                         worker.shutdown();
                     }
+                    self.reduction_queue.clear();
                     return self.shutdown(smallest_interesting, orig_size);
                 }
             }

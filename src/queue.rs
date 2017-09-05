@@ -46,6 +46,11 @@ impl ReductionQueue {
         self.reductions.len()
     }
 
+    /// Clear the reduction queue, leaving it empty.
+    pub fn clear(&mut self) {
+        self.reductions.clear();
+    }
+
     /// Insert a new reduction into the queue, that was produced by the reducer
     /// actor with the given id.
     pub fn insert(
