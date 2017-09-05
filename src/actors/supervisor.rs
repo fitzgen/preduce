@@ -173,7 +173,7 @@ where
 
     reducer_id_counter: usize,
     reducer_actors: HashMap<ReducerId, Reducer>,
-    reducer_names: HashMap<ReducerId, String>,
+    reducer_id_to_trait_object: HashMap<ReducerId, Box<traits::Reducer>>,
     exhausted_reducers: HashSet<ReducerId>,
     reduction_queue: ReductionQueue,
 
@@ -217,7 +217,7 @@ where
             idle_workers: Vec::with_capacity(num_workers),
             reducer_id_counter: 0,
             reducer_actors: HashMap::with_capacity(num_reducers),
-            reducer_names: HashMap::with_capacity(num_reducers),
+            reducer_id_to_trait_object: HashMap::with_capacity(num_reducers),
             exhausted_reducers: HashSet::with_capacity(num_reducers),
             reduction_queue: ReductionQueue::with_capacity(num_reducers),
             interesting_counter: 0,
@@ -341,8 +341,8 @@ where
                     // message, but didn't for this one because it wasn't in the
                     // exhausted set at that time.
                     if seed == smallest_interesting {
-                        self.oracle
-                            .observe_exhausted(&self.reducer_names[&reducer.id()]);
+                        let name = self.reducer_id_to_trait_object[&reducer.id()].name();
+                        self.oracle.observe_exhausted(&name);
                         self.exhausted_reducers.insert(reducer.id());
                     } else {
                         reducer.request_next_reduction();
@@ -658,7 +658,7 @@ where
             let id = ReducerId::new(self.reducer_id_counter);
             self.reducer_id_counter += 1;
 
-            self.reducer_names.insert(id, reducer.name().to_string());
+            self.reducer_id_to_trait_object.insert(id, reducer.clone_unseeded());
             let reducer_actor = Reducer::spawn(id, reducer, self.me.clone(), self.logger.clone())?;
             self.reducer_actors.insert(id, reducer_actor);
             self.exhausted_reducers.insert(id);
