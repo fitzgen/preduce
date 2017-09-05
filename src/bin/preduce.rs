@@ -1,5 +1,4 @@
 //! The `preduce` executable.
-
 #![deny(missing_docs)]
 
 extern crate clap;
@@ -151,7 +150,10 @@ fn try_main() -> error::Result<()> {
     }
 
     // For args with a default value, value_of will always succeed.
-    let git_gc_threshold = args.value_of("git_gc_threshold").unwrap().parse::<usize>().unwrap();
+    let git_gc_threshold = args.value_of("git_gc_threshold")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
     options = options.git_gc_threshold(git_gc_threshold);
 
     options.run()

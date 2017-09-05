@@ -1,5 +1,3 @@
-extern crate preduce;
-
 use std::process::Command;
 
 #[test]

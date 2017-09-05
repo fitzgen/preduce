@@ -26,7 +26,8 @@ impl Reducer for Box<Reducer> {
     }
 
     fn clone_unseeded(&self) -> Box<Reducer>
-    where Self: 'static
+    where
+        Self: 'static,
     {
         (**self).clone_unseeded()
     }
@@ -177,7 +178,9 @@ impl Script {
     fn shutdown_child(&mut self) {
         if let Some(mut child) = self.child.take() {
             if {
-                write!(child.stdin.as_mut().unwrap(), "\n").and_then(|_| child.wait()).is_err()
+                write!(child.stdin.as_mut().unwrap(), "\n")
+                    .and_then(|_| child.wait())
+                    .is_err()
             } {
                 self.kill_child();
             }
@@ -224,8 +227,8 @@ impl Script {
         // this fails, then the child already exited, presumably because it
         // determined it could not generate any reductions from the test file.
         if {
-            let mut child = self.child.as_mut().unwrap();
-            let mut child_stdin = child.stdin.as_mut().unwrap();
+            let child = self.child.as_mut().unwrap();
+            let child_stdin = child.stdin.as_mut().unwrap();
             write!(child_stdin, "{}\n", temp_file.path().display()).is_err()
         } {
             self.kill_child();
@@ -236,7 +239,7 @@ impl Script {
         // the child has finished generating the reduction.
         let mut newline = [0];
         if {
-            let mut child_stdout = self.child_stdout.as_mut().unwrap();
+            let child_stdout = self.child_stdout.as_mut().unwrap();
             child_stdout.read_exact(&mut newline).is_err()
         } {
             self.kill_child();
@@ -283,7 +286,8 @@ impl Script {
             if reduction.size() >= seed_size {
                 self.kill_child();
                 let details = format!(
-                    "'{}' is generating reductions that are greater than or equal the seed's size: {} >= {}",
+                    "'{}' is generating reductions that are greater than or equal the seed's size: \
+                     {} >= {}",
                     self.program.to_string_lossy(),
                     reduction.size(),
                     seed_size
@@ -337,7 +341,8 @@ impl Reducer for Script {
     }
 
     fn clone_unseeded(&self) -> Box<Reducer>
-        where Self: 'static
+    where
+        Self: 'static,
     {
         Box::new(Script {
             program: self.program.clone(),
@@ -428,7 +433,8 @@ where
     }
 
     fn clone_unseeded(&self) -> Box<Reducer>
-        where Self: 'static
+    where
+        Self: 'static,
     {
         Box::new(LazilyReseed {
             inner: self.inner.clone_unseeded(),
@@ -522,11 +528,12 @@ where
     }
 
     fn clone_unseeded(&self) -> Box<Reducer>
-        where Self: 'static
+    where
+        Self: 'static,
     {
         Box::new(Shuffle {
             reducer: self.reducer.clone_unseeded(),
-            buffer: Vec::with_capacity(self.buffer.capacity())
+            buffer: Vec::with_capacity(self.buffer.capacity()),
         })
     }
 }
@@ -614,32 +621,29 @@ where
 
     fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
         match self.state {
-            ChainState::First => {
-                match self.first.next_potential_reduction() {
-                    Err(e) => Err(e),
-                    Ok(Some(reduction)) => Ok(Some(reduction)),
-                    Ok(None) => {
-                        self.state = ChainState::Second;
-                        self.next_potential_reduction()
-                    }
+            ChainState::First => match self.first.next_potential_reduction() {
+                Err(e) => Err(e),
+                Ok(Some(reduction)) => Ok(Some(reduction)),
+                Ok(None) => {
+                    self.state = ChainState::Second;
+                    self.next_potential_reduction()
                 }
-            }
-            ChainState::Second => {
-                match self.second.next_potential_reduction() {
-                    Err(e) => Err(e),
-                    Ok(Some(reduction)) => Ok(Some(reduction)),
-                    Ok(None) => {
-                        self.state = ChainState::Done;
-                        Ok(None)
-                    }
+            },
+            ChainState::Second => match self.second.next_potential_reduction() {
+                Err(e) => Err(e),
+                Ok(Some(reduction)) => Ok(Some(reduction)),
+                Ok(None) => {
+                    self.state = ChainState::Done;
+                    Ok(None)
                 }
-            }
+            },
             ChainState::Done => Ok(None),
         }
     }
 
     fn clone_unseeded(&self) -> Box<Reducer>
-        where Self: 'static
+    where
+        Self: 'static,
     {
         Box::new(Chain {
             first: self.first.clone_unseeded(),
@@ -727,7 +731,8 @@ where
     }
 
     fn clone_unseeded(&self) -> Box<Reducer>
-        where Self: 'static
+    where
+        Self: 'static,
     {
         Box::new(Fuse {
             reducer: self.reducer.clone_unseeded(),
@@ -804,7 +809,8 @@ where
     }
 
     fn clone_unseeded(&self) -> Box<Reducer>
-        where Self: 'static
+    where
+        Self: 'static,
     {
         Box::new(DontRepeatYourself {
             inner: self.inner.clone_unseeded(),
@@ -940,7 +946,8 @@ mod tests {
             }
 
             fn clone_unseeded(&self) -> Box<Reducer>
-                where Self: 'static
+            where
+                Self: 'static,
             {
                 Box::new(self.clone())
             }

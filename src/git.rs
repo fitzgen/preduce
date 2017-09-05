@@ -7,8 +7,8 @@ use std::fmt;
 use std::fs;
 use std::ops;
 use std::path;
-use std::sync::Arc;
 use std::process::Stdio;
+use std::sync::Arc;
 use tempdir;
 
 /// The file name for test cases within a git repository.
@@ -208,8 +208,7 @@ impl TempRepo {
             file.sync_all()?;
 
             let mut index = repo.index()?;
-            index
-                .add_path(path::Path::new(test_case_path.file_name().unwrap()))?;
+            index.add_path(path::Path::new(test_case_path.file_name().unwrap()))?;
 
             let tree = repo.treebuilder(None)?.write()?;
             let tree = repo.find_tree(tree)?;

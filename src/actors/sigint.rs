@@ -4,8 +4,8 @@
 use super::{Logger, Supervisor};
 use ctrlc;
 use error;
-use std::sync::atomic::{ATOMIC_BOOL_INIT, AtomicBool, Ordering};
 use std::sync::{Once, ONCE_INIT};
+use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -52,23 +52,18 @@ impl Sigint {
             // Just ignore any potential error setting the handler. It just
             // means that if we do get a SIGINT, then we'll be shutdown
             // un-gracefully at that time.
-            let _ = ctrlc::set_handler(move || {
-                GOT_SIGINT.store(true, Ordering::SeqCst);
-            });
+            let _ = ctrlc::set_handler(move || { GOT_SIGINT.store(true, Ordering::SeqCst); });
         });
 
         loop {
             thread::sleep(Duration::from_millis(50));
 
             match incoming.try_recv() {
-                Ok(SigintMessage::Shutdown) |
-                Err(mpsc::TryRecvError::Disconnected) => return,
-                Err(mpsc::TryRecvError::Empty) => {
-                    if GOT_SIGINT.swap(false, Ordering::SeqCst) {
-                        logger.got_sigint();
-                        supervisor.got_sigint();
-                    }
-                }
+                Ok(SigintMessage::Shutdown) | Err(mpsc::TryRecvError::Disconnected) => return,
+                Err(mpsc::TryRecvError::Empty) => if GOT_SIGINT.swap(false, Ordering::SeqCst) {
+                    logger.got_sigint();
+                    supervisor.got_sigint();
+                },
             }
         }
     }

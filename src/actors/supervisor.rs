@@ -144,9 +144,7 @@ impl Supervisor {
     // Messages sent to the supervisor from the SIGINT actor.
 
     pub fn got_sigint(&self) {
-        self.sender
-            .send(SupervisorMessage::GotSigint)
-            .unwrap();
+        self.sender.send(SupervisorMessage::GotSigint).unwrap();
     }
 }
 
@@ -231,24 +229,42 @@ where
 
         supervisor.backup_original_test_case()?;
         supervisor.spawn_reducers()?;
-        supervisor.spawn_workers()?;
 
-        let initial_interesting = supervisor.verify_initially_interesting()?;
-        supervisor.reseed_reducers(&initial_interesting)?;
-        supervisor.run_loop(incoming, initial_interesting)
+        let mut smallest_interesting = supervisor.verify_initially_interesting()?;
+
+        let orig_size = smallest_interesting.size();
+
+        loop {
+            let last_iter_size = smallest_interesting.size();
+
+            supervisor.reseed_reducers(&smallest_interesting)?;
+            supervisor.spawn_workers()?;
+
+            let should_continue = supervisor.reduction_loop_iteration(
+                &incoming,
+                &mut smallest_interesting,
+                orig_size,
+            )?;
+
+            if !should_continue || smallest_interesting.size() >= last_iter_size {
+                return supervisor.shutdown(smallest_interesting, orig_size);
+            }
+        }
     }
 
     /// Run the supervisor's main loop, serving reductions to workers, and
     /// keeping track of the globally smallest interesting test case.
-    fn run_loop(
-        mut self,
-        incoming: mpsc::Receiver<SupervisorMessage>,
-        initial_interesting: test_case::Interesting,
-    ) -> error::Result<()> {
+    ///
+    /// Returns `true` if we should continue another iteration if we've made any
+    /// progress. Returns `false` if we should shutdown regardless whether we've
+    /// made any progress.
+    fn reduction_loop_iteration(
+        &mut self,
+        incoming: &mpsc::Receiver<SupervisorMessage>,
+        smallest_interesting: &mut test_case::Interesting,
+        orig_size: u64,
+    ) -> error::Result<bool> {
         let _signpost = signposts::SupervisorRunLoop::new();
-
-        let mut smallest_interesting = initial_interesting;
-        let orig_size = smallest_interesting.size();
 
         for msg in incoming {
             match msg {
@@ -275,13 +291,12 @@ where
                         who,
                         downstream,
                         orig_size,
-                        &mut smallest_interesting,
+                        smallest_interesting,
                         interesting,
                     )?;
                 }
 
                 // Messages from reducer actors...
-
                 SupervisorMessage::ReducerPanicked(id, panic) => {
                     assert!(self.reducer_actors.contains_key(&id));
                     assert!(self.reducer_id_to_trait_object.contains_key(&id));
@@ -346,7 +361,7 @@ where
                     // exhausted reducers when sending the initial reseed
                     // message, but didn't for this one because it wasn't in the
                     // exhausted set at that time.
-                    if seed == smallest_interesting {
+                    if seed == *smallest_interesting {
                         let name = self.reducer_id_to_trait_object[&reducer.id()].name();
                         self.oracle.observe_exhausted(&name);
                         self.exhausted_reducers.insert(reducer.id());
@@ -374,7 +389,7 @@ where
                         worker.shutdown();
                     }
                     self.reduction_queue.clear();
-                    return self.shutdown(smallest_interesting, orig_size);
+                    return Ok(false);
                 }
             }
 
@@ -395,7 +410,7 @@ where
             }
         }
 
-        self.shutdown(smallest_interesting, orig_size)
+        Ok(true)
     }
 
     /// Consume this supervisor actor and perform shutdown.
@@ -528,7 +543,8 @@ where
             fs::copy(smallest_interesting.path(), &self.opts.test_case)?;
             self.oracle
                 .observe_smallest_interesting(&smallest_interesting);
-            self.logger.new_smallest(smallest_interesting.clone(), orig_size);
+            self.logger
+                .new_smallest(smallest_interesting.clone(), orig_size);
 
             // Second, reset our repo's HEAD to the new interesting test case's
             // commit.
@@ -615,8 +631,7 @@ where
         self.logger
             .backing_up_test_case(&self.opts.test_case, &backup_path);
 
-        fs::copy(&self.opts.test_case, backup_path)
-            .map_err(error::Error::TestCaseBackupFailure)?;
+        fs::copy(&self.opts.test_case, backup_path).map_err(error::Error::TestCaseBackupFailure)?;
 
         Ok(())
     }
@@ -664,7 +679,8 @@ where
             let id = ReducerId::new(self.reducer_id_counter);
             self.reducer_id_counter += 1;
 
-            self.reducer_id_to_trait_object.insert(id, reducer.clone_unseeded());
+            self.reducer_id_to_trait_object
+                .insert(id, reducer.clone_unseeded());
             let reducer_actor = Reducer::spawn(id, reducer, self.me.clone(), self.logger.clone())?;
             self.reducer_actors.insert(id, reducer_actor);
             self.exhausted_reducers.insert(id);
@@ -674,7 +690,10 @@ where
 
     /// Reseed each of the reducer actors with the new smallest interesting test
     /// case.
-    fn reseed_reducers(&mut self, smallest_interesting: &test_case::Interesting) -> error::Result<()> {
+    fn reseed_reducers(
+        &mut self,
+        smallest_interesting: &test_case::Interesting,
+    ) -> error::Result<()> {
         // Re-spawn any reducers that may have panicked with the previous test
         // case as input.
         self.spawn_reducers()?;

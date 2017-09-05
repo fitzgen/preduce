@@ -8,7 +8,6 @@
 //!
 //! For programmatic usage of `preduce` as a library, see the `preduce::Options`
 //! entry point to `preduce`'s public API.
-
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
 #![deny(unsafe_code)]
@@ -18,8 +17,8 @@ extern crate either;
 extern crate fixedbitset;
 extern crate git2;
 extern crate histo;
-extern crate tempdir;
 extern crate num_cpus;
+extern crate tempdir;
 
 mod actors;
 pub mod error;

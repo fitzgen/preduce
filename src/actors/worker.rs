@@ -72,8 +72,16 @@ impl Worker {
         thread::Builder::new()
             .name(format!("preduce-worker-{}", id))
             .spawn(move || {
-                WorkerActor::run(id, me2, predicate, receiver, supervisor, logger, upstream,
-                                 git_gc_threshold);
+                WorkerActor::run(
+                    id,
+                    me2,
+                    predicate,
+                    receiver,
+                    supervisor,
+                    logger,
+                    upstream,
+                    git_gc_threshold,
+                );
             })?;
 
         Ok(me)
@@ -163,8 +171,16 @@ impl WorkerActor {
             let supervisor2 = supervisor.clone();
             let logger2 = logger.clone();
             panic::catch_unwind(panic::AssertUnwindSafe(move || {
-                WorkerActor::try_run(id, me, predicate, incoming, supervisor2, logger2, upstream,
-                                     git_gc_threshold)
+                WorkerActor::try_run(
+                    id,
+                    me,
+                    predicate,
+                    incoming,
+                    supervisor2,
+                    logger2,
+                    upstream,
+                    git_gc_threshold,
+                )
             }))
         } {
             Err(p) => {
@@ -269,12 +285,10 @@ impl WorkerActor {
             .request_next_reduction(self.me.clone(), not_interesting);
         match self.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => self.shutdown(),
-            WorkerMessage::NextReduction(reduction) => {
-                Some(Test {
-                    worker: self,
-                    reduction: reduction,
-                })
-            }
+            WorkerMessage::NextReduction(reduction) => Some(Test {
+                worker: self,
+                reduction: reduction,
+            }),
             otherwise => {
                 panic!(
                     "Unexpected response to next-reduction request: {:?}",
@@ -308,9 +322,12 @@ impl Test {
             )?;
         }
 
-        self.worker.logger.start_judging_interesting(self.worker.id, self.reduction.clone());
+        self.worker
+            .logger
+            .start_judging_interesting(self.worker.id, self.reduction.clone());
         match self.reduction
-            .into_interesting(&self.worker.predicate, &self.worker.repo)? {
+            .into_interesting(&self.worker.predicate, &self.worker.repo)?
+        {
             Left(interesting) => {
                 self.worker
                     .logger
@@ -342,12 +359,10 @@ impl Interesting {
 
         match self.worker.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => Right(self.worker.shutdown()),
-            WorkerMessage::NextReduction(reduction) => {
-                Right(Some(Test {
-                    worker: self.worker,
-                    reduction: reduction,
-                }))
-            }
+            WorkerMessage::NextReduction(reduction) => Right(Some(Test {
+                worker: self.worker,
+                reduction: reduction,
+            })),
             WorkerMessage::TryMerge(upstream_size, commit_id) => {
                 assert!(
                     upstream_size <= self.interesting.size(),
@@ -366,9 +381,11 @@ impl Interesting {
 
 impl TryMerge {
     fn try_merge(self) -> error::Result<Either<Test, WorkerActor>> {
-        self.worker
-            .logger
-            .try_merging(self.worker.id, self.commit_id, self.interesting.commit_id());
+        self.worker.logger.try_merging(
+            self.worker.id,
+            self.commit_id,
+            self.interesting.commit_id(),
+        );
 
         let our_commit = self.worker.repo.head_id()?;
 

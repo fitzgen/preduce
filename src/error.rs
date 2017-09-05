@@ -47,12 +47,10 @@ impl fmt::Display for Error {
             Error::TestCaseBackupFailure(ref e) => {
                 write!(f, "Could not backup initial test case: {}", e)
             }
-            Error::InitialTestCaseNotInteresting => {
-                write!(
-                    f,
-                    "The initial test case did not pass the is-interesting predicate"
-                )
-            }
+            Error::InitialTestCaseNotInteresting => write!(
+                f,
+                "The initial test case did not pass the is-interesting predicate"
+            ),
             Error::DoesNotExist(ref file_path) => {
                 write!(f, "The file does not exist: {}", file_path.display())
             }
