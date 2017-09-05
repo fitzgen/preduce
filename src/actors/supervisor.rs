@@ -172,7 +172,7 @@ where
     idle_workers: Vec<Worker>,
 
     reducer_id_counter: usize,
-    reducers: HashMap<ReducerId, Reducer>,
+    reducer_actors: HashMap<ReducerId, Reducer>,
     reducer_names: HashMap<ReducerId, String>,
     exhausted_reducers: HashSet<ReducerId>,
     reduction_queue: ReductionQueue,
@@ -216,7 +216,7 @@ where
             workers: HashMap::with_capacity(num_workers),
             idle_workers: Vec::with_capacity(num_workers),
             reducer_id_counter: 0,
-            reducers: HashMap::with_capacity(num_reducers),
+            reducer_actors: HashMap::with_capacity(num_reducers),
             reducer_names: HashMap::with_capacity(num_reducers),
             exhausted_reducers: HashSet::with_capacity(num_reducers),
             reduction_queue: ReductionQueue::with_capacity(num_reducers),
@@ -289,7 +289,7 @@ where
                 }
 
                 SupervisorMessage::ReplyExhausted(reducer, seed) => {
-                    assert!(self.reducers.contains_key(&reducer.id()));
+                    assert!(self.reducer_actors.contains_key(&reducer.id()));
 
                     // If the seed whose reductions are exhausted is our current
                     // smallest, then the reducer really is exhausted. If it
@@ -350,7 +350,7 @@ where
                 }
 
                 SupervisorMessage::ReplyNextReduction(reducer, reduction) => {
-                    assert!(self.reducers.contains_key(&reducer.id()));
+                    assert!(self.reducer_actors.contains_key(&reducer.id()));
                     debug_assert!(self.repo.find_object(reduction.parent(), None).is_ok());
 
                     if reduction.size() < smallest_interesting.size() {
@@ -374,7 +374,7 @@ where
             // If all of our reducers are exhausted, and we are out of potential
             // reductions to test, then shutdown any idle workers, since we
             // don't have any work for them.
-            if self.exhausted_reducers.len() == self.reducers.len() &&
+            if self.exhausted_reducers.len() == self.reducer_actors.len() &&
                 self.reduction_queue.is_empty()
             {
                 for worker in self.idle_workers.drain(..) {
@@ -399,7 +399,7 @@ where
     ) -> error::Result<()> {
         assert!(self.workers.is_empty());
         assert!(self.reduction_queue.is_empty());
-        assert_eq!(self.exhausted_reducers.len(), self.reducers.len());
+        assert_eq!(self.exhausted_reducers.len(), self.reducer_actors.len());
 
         let _signpost = signposts::SupervisorShutdown::new();
 
@@ -412,7 +412,7 @@ where
         // Tell all the reducer actors to shutdown, and then wait for them
         // finish their cleanup by joining the logger thread, which exits once
         // log messages can no longer be sent to it.
-        for (_, r) in self.reducers {
+        for (_, r) in self.reducer_actors {
             r.shutdown();
         }
         drop(self.logger);
@@ -477,7 +477,7 @@ where
 
         for (worker, (reduction, reducer_id)) in workers.zip(reductions) {
             assert!(self.workers.contains_key(&worker.id()));
-            assert!(self.reducers.contains_key(&reducer_id));
+            assert!(self.reducer_actors.contains_key(&reducer_id));
 
             // Send the worker the next reduction from the queue to test for
             // interestingness.
@@ -486,7 +486,7 @@ where
             // And pipeline the worker's is-interesting test with generating the
             // next reduction.
             if !self.exhausted_reducers.contains(&reducer_id) {
-                self.reducers[&reducer_id].request_next_reduction();
+                self.reducer_actors[&reducer_id].request_next_reduction();
             }
         }
     }
@@ -553,7 +553,7 @@ where
             // considering, tell its progenitor to generate its next reduction
             // from the new seed.
             {
-                let reducers = &self.reducers;
+                let reducers = &self.reducer_actors;
                 self.reduction_queue.retain(|reduction, reducer_id| {
                     if reduction.size() < new_size {
                         return true;
@@ -660,7 +660,7 @@ where
 
             self.reducer_names.insert(id, reducer.name().to_string());
             let reducer_actor = Reducer::spawn(id, reducer, self.me.clone(), self.logger.clone())?;
-            self.reducers.insert(id, reducer_actor);
+            self.reducer_actors.insert(id, reducer_actor);
             self.exhausted_reducers.insert(id);
         }
         Ok(())
@@ -669,7 +669,7 @@ where
     /// Reseed each of the reducer actors with the new smallest interesting test
     /// case.
     fn reseed_reducers(&mut self, smallest_interesting: &test_case::Interesting) {
-        for (id, reducer_actor) in &self.reducers {
+        for (id, reducer_actor) in &self.reducer_actors {
             reducer_actor.set_new_seed(smallest_interesting.clone());
 
             // If the reducer was exhausted, put it back to work again by
