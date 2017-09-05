@@ -174,6 +174,7 @@ where
     reducer_id_counter: usize,
     reducer_actors: HashMap<ReducerId, Reducer>,
     reducer_id_to_trait_object: HashMap<ReducerId, Box<traits::Reducer>>,
+    reducers_without_actors: Vec<Box<traits::Reducer>>,
     exhausted_reducers: HashSet<ReducerId>,
     reduction_queue: ReductionQueue,
 
@@ -193,7 +194,7 @@ where
     I: 'static + traits::IsInteresting,
 {
     fn run(
-        opts: Options<I>,
+        mut opts: Options<I>,
         me: Supervisor,
         incoming: mpsc::Receiver<SupervisorMessage>,
     ) -> error::Result<()> {
@@ -201,6 +202,8 @@ where
 
         let num_workers = opts.num_workers();
         let num_reducers = opts.reducers().len();
+        let reducers_without_actors = opts.take_reducers();
+
         let (logger, logger_handle) = Logger::spawn(fs::File::create("preduce.log")?)?;
         let (sigint, sigint_handle) = Sigint::spawn(me.clone(), logger.clone())?;
 
@@ -218,6 +221,7 @@ where
             reducer_id_counter: 0,
             reducer_actors: HashMap::with_capacity(num_reducers),
             reducer_id_to_trait_object: HashMap::with_capacity(num_reducers),
+            reducers_without_actors,
             exhausted_reducers: HashSet::with_capacity(num_reducers),
             reduction_queue: ReductionQueue::with_capacity(num_reducers),
             interesting_counter: 0,
@@ -653,8 +657,7 @@ where
 
     /// Spawn a reducer actor for each reducer given to us in the options.
     fn spawn_reducers(&mut self) -> error::Result<()> {
-        let reducers = self.opts.take_reducers();
-        for reducer in reducers.into_iter() {
+        for reducer in self.reducers_without_actors.drain(..) {
             let id = ReducerId::new(self.reducer_id_counter);
             self.reducer_id_counter += 1;
 
