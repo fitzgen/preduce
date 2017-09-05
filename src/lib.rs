@@ -67,6 +67,7 @@ where
     is_interesting: I,
     reducers: Vec<Box<traits::Reducer>>,
     workers: usize,
+    print_histograms: bool,
     try_merging: bool,
     git_gc_threshold: usize,
 }
@@ -111,6 +112,7 @@ where
             is_interesting: is_interesting,
             reducers: reducers,
             workers: num_cpus::get(),
+            print_histograms: false,
             try_merging: true,
             git_gc_threshold: DEFAULT_GIT_GC_THRESHOLD,
         }
@@ -140,6 +142,16 @@ where
     pub fn workers(mut self, num_workers: usize) -> Options<I> {
         assert!(num_workers != 0);
         self.workers = num_workers;
+        self
+    }
+
+    /// Whether we should print various histograms when we finish the reduction
+    /// process.
+    ///
+    /// This is generally only useful for people hacking on `preduce`, or those
+    /// for who get tickled just by seeing a histogram in their terminal.
+    pub fn print_histograms(mut self, should_print_histograms: bool) -> Options<I> {
+        self.print_histograms = should_print_histograms;
         self
     }
 

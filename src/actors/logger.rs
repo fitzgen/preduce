@@ -172,14 +172,17 @@ pub struct Logger {
 /// Logger client implementation.
 impl Logger {
     /// Spawn a `Logger` actor, writing logs to the given `Write`able.
-    pub fn spawn<W>(to: W) -> error::Result<(Logger, thread::JoinHandle<()>)>
+    pub fn spawn<W>(
+        to: W,
+        should_print_histograms: bool,
+    ) -> error::Result<(Logger, thread::JoinHandle<()>)>
     where
         W: 'static + Send + Write,
     {
         let (sender, receiver) = mpsc::channel();
         let handle = thread::Builder::new()
             .name("preduce-logger".into())
-            .spawn(move || Logger::run(to, receiver))?;
+            .spawn(move || Logger::run(to, receiver, should_print_histograms))?;
         Ok((Logger { sender: sender }, handle))
     }
 
@@ -349,7 +352,7 @@ fn sum(h: &Histogram) -> u64 {
 
 /// Logger actor implementation.
 impl Logger {
-    fn run<W>(mut to: W, incoming: mpsc::Receiver<LoggerMessage>)
+    fn run<W>(mut to: W, incoming: mpsc::Receiver<LoggerMessage>, should_print_histograms: bool)
     where
         W: Write,
     {
@@ -491,6 +494,10 @@ impl Logger {
 
         println!("Final size is {}", smallest_size);
         println!();
+
+        if !should_print_histograms {
+            return;
+        }
 
         let mut by_provenance: Vec<_> = by_provenance.into_iter().collect();
         by_provenance.sort_by(|&(_, ref s), &(_, ref t)| {

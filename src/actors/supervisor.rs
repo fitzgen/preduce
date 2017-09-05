@@ -202,7 +202,8 @@ where
         let num_reducers = opts.reducers().len();
         let reducers_without_actors = opts.take_reducers();
 
-        let (logger, logger_handle) = Logger::spawn(fs::File::create("preduce.log")?)?;
+        let (logger, logger_handle) =
+            Logger::spawn(fs::File::create("preduce.log")?, opts.print_histograms)?;
         let (sigint, sigint_handle) = Sigint::spawn(me.clone(), logger.clone())?;
 
         let mut supervisor = SupervisorActor {

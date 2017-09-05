@@ -61,6 +61,12 @@ fn parse_args() -> clap::ArgMatches<'static> {
                 ),
         )
         .arg(
+            clap::Arg::with_name("print-histograms")
+                .short("m")
+                .long("print-histograms")
+                .help("Print histograms when finished."),
+        )
+        .arg(
             clap::Arg::with_name("no_merging")
                 .short("n")
                 .long("no-merging")
@@ -143,6 +149,10 @@ fn try_main() -> error::Result<()> {
     if let Some(num_workers) = args.value_of("workers") {
         let num_workers = num_workers.parse::<usize>().unwrap();
         options = options.workers(num_workers);
+    }
+
+    if args.is_present("print-histograms") {
+        options = options.print_histograms(true);
     }
 
     if args.is_present("no_merging") {
