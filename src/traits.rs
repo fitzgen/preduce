@@ -33,6 +33,12 @@ pub trait Reducer: fmt::Debug + Send {
     /// generated a potential reduction of the test case, or `None` if it has
     /// exhausted all of its potential reductions.
     fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>>;
+
+    /// Clone this `Reducer` as an owned trait object. The resulting reducer
+    /// should be unseeded.
+    fn clone_unseeded(&self) -> Box<Reducer>
+    where
+        Self: 'static;
 }
 
 /// Is a potential reduction interesting?

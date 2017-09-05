@@ -24,6 +24,12 @@ impl Reducer for Box<Reducer> {
     fn next_potential_reduction(&mut self) -> error::Result<Option<test_case::PotentialReduction>> {
         (**self).next_potential_reduction()
     }
+
+    fn clone_unseeded(&self) -> Box<Reducer>
+    where Self: 'static
+    {
+        (**self).clone_unseeded()
+    }
 }
 
 /// A test case reducer that is implemented as an external script.
@@ -329,6 +335,20 @@ impl Reducer for Script {
             }
         }
     }
+
+    fn clone_unseeded(&self) -> Box<Reducer>
+        where Self: 'static
+    {
+        Box::new(Script {
+            program: self.program.clone(),
+            out_dir: None,
+            counter: 0,
+            seed: None,
+            child: None,
+            child_stdout: None,
+            strict: self.strict,
+        })
+    }
 }
 
 /// Exhuast the inner reducer's potential reductions before reseeding it.
@@ -405,6 +425,16 @@ where
                 err
             }
         }
+    }
+
+    fn clone_unseeded(&self) -> Box<Reducer>
+        where Self: 'static
+    {
+        Box::new(LazilyReseed {
+            inner: self.inner.clone_unseeded(),
+            current_seed: None,
+            next_seed: None,
+        })
     }
 }
 
@@ -489,6 +519,15 @@ where
         }
 
         Ok(self.buffer.pop())
+    }
+
+    fn clone_unseeded(&self) -> Box<Reducer>
+        where Self: 'static
+    {
+        Box::new(Shuffle {
+            reducer: self.reducer.clone_unseeded(),
+            buffer: Vec::with_capacity(self.buffer.capacity())
+        })
     }
 }
 
@@ -598,6 +637,16 @@ where
             ChainState::Done => Ok(None),
         }
     }
+
+    fn clone_unseeded(&self) -> Box<Reducer>
+        where Self: 'static
+    {
+        Box::new(Chain {
+            first: self.first.clone_unseeded(),
+            second: self.second.clone_unseeded(),
+            state: ChainState::First,
+        })
+    }
 }
 
 /// A reducer which ends after the first `Ok(None)` or `Err`.
@@ -676,6 +725,15 @@ where
             }
         }
     }
+
+    fn clone_unseeded(&self) -> Box<Reducer>
+        where Self: 'static
+    {
+        Box::new(Fuse {
+            reducer: self.reducer.clone_unseeded(),
+            finished: false,
+        })
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -743,6 +801,15 @@ where
             }
             otherwise => otherwise,
         }
+    }
+
+    fn clone_unseeded(&self) -> Box<Reducer>
+        where Self: 'static
+    {
+        Box::new(DontRepeatYourself {
+            inner: self.inner.clone_unseeded(),
+            state: DryState::Reducing(0),
+        })
     }
 }
 
@@ -849,7 +916,7 @@ mod tests {
 
     #[test]
     fn fuse() {
-        #[derive(Debug)]
+        #[derive(Clone, Debug)]
         struct Erratic(usize);
 
         impl Reducer for Erratic {
@@ -870,6 +937,12 @@ mod tests {
                 };
                 self.0 += 1;
                 result
+            }
+
+            fn clone_unseeded(&self) -> Box<Reducer>
+                where Self: 'static
+            {
+                Box::new(self.clone())
             }
         }
 
