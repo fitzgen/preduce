@@ -234,7 +234,7 @@ where
         supervisor.spawn_workers()?;
 
         let initial_interesting = supervisor.verify_initially_interesting()?;
-        supervisor.reseed_reducers(&initial_interesting);
+        supervisor.reseed_reducers(&initial_interesting)?;
         supervisor.run_loop(incoming, initial_interesting)
     }
 
@@ -282,18 +282,20 @@ where
 
                 // Messages from reducer actors...
 
-                // FIXME: Unlike workers, we don't currently have an easy way to
-                // restart reducers, so treat reducer failures as fatal. There
-                // isn't any inherent reason why we can't restart reducers,
-                // however, we just need to write the glue code that clones
-                // `Reducer` trait objects and all of that.
                 SupervisorMessage::ReducerPanicked(id, panic) => {
+                    assert!(self.reducer_actors.contains_key(&id));
+                    assert!(self.reducer_id_to_trait_object.contains_key(&id));
+
                     self.logger.reducer_panicked(id, panic);
-                    return Err(error::Error::ReducerActorPanicked);
+                    self.reducer_actors.remove(&id);
+
+                    let reducer = self.reducer_id_to_trait_object.remove(&id).unwrap();
+                    self.reducers_without_actors.push(reducer);
                 }
 
                 SupervisorMessage::ReplyExhausted(reducer, seed) => {
                     assert!(self.reducer_actors.contains_key(&reducer.id()));
+                    assert!(self.reducer_id_to_trait_object.contains_key(&reducer.id()));
 
                     // If the seed whose reductions are exhausted is our current
                     // smallest, then the reducer really is exhausted. If it
@@ -548,7 +550,7 @@ where
             // respawn any workers that might have shutdown because we exhausted
             // all possible reductions on the previous smallest interesting test
             // case.
-            self.reseed_reducers(smallest_interesting);
+            self.reseed_reducers(smallest_interesting)?;
             self.spawn_workers()?;
 
             // Fourth, clear out any queued potential reductions that are larger
@@ -671,7 +673,11 @@ where
 
     /// Reseed each of the reducer actors with the new smallest interesting test
     /// case.
-    fn reseed_reducers(&mut self, smallest_interesting: &test_case::Interesting) {
+    fn reseed_reducers(&mut self, smallest_interesting: &test_case::Interesting) -> error::Result<()> {
+        // Re-spawn any reducers that may have panicked with the previous test
+        // case as input.
+        self.spawn_reducers()?;
+
         for (id, reducer_actor) in &self.reducer_actors {
             reducer_actor.set_new_seed(smallest_interesting.clone());
 
@@ -685,5 +691,7 @@ where
                 self.exhausted_reducers.remove(id);
             }
         }
+
+        Ok(())
     }
 }
