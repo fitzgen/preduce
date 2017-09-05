@@ -55,7 +55,7 @@ function test_reducer {
     # it.
     (sleep 999999999999 > "$child_stdin")&
     sleep_pid=$!
-    (sleep 999999999999 > "$child_stdout")&
+    (sleep 999999999999; read ignored < "$child_stdout")&
     sleep_pid2=$!
 
     # Spawn the reducer in the background with its stdin and stdout connected to
