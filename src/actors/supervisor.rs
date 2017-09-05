@@ -158,24 +158,33 @@ where
 {
     opts: Options<I>,
     me: Supervisor,
+
     logger: Logger,
     logger_handle: thread::JoinHandle<()>,
+
     sigint: Sigint,
     sigint_handle: thread::JoinHandle<()>,
+
     repo: git::TempRepo,
+
     worker_id_counter: usize,
     workers: HashMap<WorkerId, Worker>,
     idle_workers: Vec<Worker>,
+
+    reducer_id_counter: usize,
     reducers: HashMap<ReducerId, Reducer>,
     reducer_names: HashMap<ReducerId, String>,
     exhausted_reducers: HashSet<ReducerId>,
     reduction_queue: ReductionQueue,
+
     interesting_counter: usize,
+
     oracle: oracle::Join3<
         oracle::InterestingRate,
         oracle::CreducePassPriorities,
         oracle::PercentReduced,
     >,
+
     resets_since_gc: usize,
 }
 
@@ -206,6 +215,7 @@ where
             worker_id_counter: 0,
             workers: HashMap::with_capacity(num_workers),
             idle_workers: Vec::with_capacity(num_workers),
+            reducer_id_counter: 0,
             reducers: HashMap::with_capacity(num_reducers),
             reducer_names: HashMap::with_capacity(num_reducers),
             exhausted_reducers: HashSet::with_capacity(num_reducers),
@@ -644,8 +654,10 @@ where
     /// Spawn a reducer actor for each reducer given to us in the options.
     fn spawn_reducers(&mut self) -> error::Result<()> {
         let reducers = self.opts.take_reducers();
-        for (i, reducer) in reducers.into_iter().enumerate() {
-            let id = ReducerId::new(i);
+        for reducer in reducers.into_iter() {
+            let id = ReducerId::new(self.reducer_id_counter);
+            self.reducer_id_counter += 1;
+
             self.reducer_names.insert(id, reducer.name().to_string());
             let reducer_actor = Reducer::spawn(id, reducer, self.me.clone(), self.logger.clone())?;
             self.reducers.insert(id, reducer_actor);
