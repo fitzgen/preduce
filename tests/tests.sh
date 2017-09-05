@@ -15,6 +15,8 @@ if [[ "$CI" == "true" ]]; then
     export TMPDIR=$(pwd)
 fi
 
+ulimit -Sn 8192
+
 # Do a full preduce reduction run.
 #
 # Usage: test_preduce_run <fixture-name> <predicate> <reducer-1> <reducer-2> ...
