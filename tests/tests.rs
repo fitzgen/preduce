@@ -249,6 +249,11 @@ test_reducers! {
             "tests/expectations/includes-3",
         ]
     }
+}
+
+// For whatever reason, we can't find `clex` on Travis CI.
+#[cfg(not(travis_ci))]
+test_reducers! {
     clex_rename_toks => {
         "reducers/clex-rename-toks.py",
         seeded with "tests/fixtures/nested-classes.cpp",
