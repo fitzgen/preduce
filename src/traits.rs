@@ -47,8 +47,7 @@ pub trait Reducer: fmt::Debug + Send {
 /// along with further potential reductions of it.
 ///
 /// If a potential reduction is interesting, then it is a candidate for the
-/// current most-reduced test case, or a even a new further potential reduction
-/// by merging it with the current most-reduced test case.
+/// current most-reduced test case.
 ///
 /// An is-interesting test should be deterministic and idempotent.
 pub trait IsInteresting: Send {
