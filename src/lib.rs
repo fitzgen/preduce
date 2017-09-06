@@ -22,7 +22,7 @@ extern crate tempdir;
 
 mod actors;
 pub mod error;
-mod git;
+pub mod git;
 pub mod interesting;
 pub mod oracle;
 mod queue;

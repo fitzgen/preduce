@@ -44,12 +44,14 @@ pub trait RepoExt {
     where
         P: AsRef<path::Path>;
 
+    /// Merge the given objects and then commit them.
     fn merge_and_commit(
         &self,
         first: git2::Oid,
         second: git2::Oid,
     ) -> error::Result<Option<git2::Oid>>;
 
+    /// Run a `git gc` to clean up after ourselves.
     fn gc(&self) -> error::Result<()>;
 }
 

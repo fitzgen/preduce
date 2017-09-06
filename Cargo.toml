@@ -3,7 +3,6 @@ authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 description = "A parallel, language agnostic, automatic test case reducer."
 name = "preduce"
 version = "0.1.0"
-
 [[bin]]
 doc = false
 name = "preduce"

@@ -1,5 +1,6 @@
 target
 tests/fixtures/*.orig
+tests/fixtures/*.preduce-run
 *.pyc
 *.gch
 *.o
