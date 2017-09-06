@@ -6,12 +6,6 @@ use std::io;
 use std::path;
 use std::process::Command;
 
-fn always_interesting(
-    _: &path::Path
-) -> preduce::error::Result<bool> {
-    Ok(true)
-}
-
 fn test_preduce_run<P, Q, R, I>(test_case: P, predicate: Q, reducers: I)
     where P: AsRef<path::Path>,
           Q: AsRef<path::Path>,
@@ -104,8 +98,10 @@ fn test_reducer<P, Q, I, R>(reducer: P, seed: Q, expecteds: I)
           R: AsRef<path::Path>,
           I: IntoIterator<Item=R>,
 {
+    let judge = preduce::interesting::NonEmpty;
+
     let repo = preduce::git::TempRepo::new("test_reducer").expect("should create temp repo OK");
-    let seed = preduce::test_case::Interesting::initial(seed, &always_interesting, &repo)
+    let seed = preduce::test_case::Interesting::initial(seed, &judge, &repo)
         .expect("should run interesting test OK")
         .expect("should be interesting");
 
