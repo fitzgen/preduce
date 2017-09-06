@@ -4,7 +4,6 @@
 use super::{Logger, Reducer, ReducerId, Sigint, Worker, WorkerId};
 use super::super::Options;
 use error;
-use git::{self, RepoExt};
 use oracle;
 use queue::ReductionQueue;
 use signposts;
@@ -26,7 +25,7 @@ enum SupervisorMessage {
     WorkerPanicked(WorkerId, Box<Any + Send + 'static>),
     WorkerErrored(WorkerId, error::Error),
     RequestNextReduction(Worker, Option<test_case::PotentialReduction>),
-    ReportInteresting(Worker, path::PathBuf, test_case::Interesting),
+    ReportInteresting(Worker, test_case::Interesting),
 
     // From reducers.
     ReducerPanicked(ReducerId, Box<Any + Send + 'static>),
@@ -101,18 +100,9 @@ impl Supervisor {
 
     /// Notify the supervisor that the given test case has been found to be
     /// interesting.
-    pub fn report_interesting(
-        &self,
-        who: Worker,
-        downstream: path::PathBuf,
-        interesting: test_case::Interesting,
-    ) {
+    pub fn report_interesting(&self, who: Worker, interesting: test_case::Interesting) {
         self.sender
-            .send(SupervisorMessage::ReportInteresting(
-                who,
-                downstream,
-                interesting,
-            ))
+            .send(SupervisorMessage::ReportInteresting(who, interesting))
             .unwrap();
     }
 
@@ -163,8 +153,6 @@ where
     sigint: Sigint,
     sigint_handle: thread::JoinHandle<()>,
 
-    repo: git::TempRepo,
-
     worker_id_counter: usize,
     workers: HashMap<WorkerId, Worker>,
     idle_workers: Vec<Worker>,
@@ -176,15 +164,11 @@ where
     exhausted_reducers: HashSet<ReducerId>,
     reduction_queue: ReductionQueue,
 
-    interesting_counter: usize,
-
     oracle: oracle::Join3<
         oracle::InterestingRate,
         oracle::CreducePassPriorities,
         oracle::PercentReduced,
     >,
-
-    resets_since_gc: usize,
 }
 
 impl<I> SupervisorActor<I>
@@ -196,8 +180,6 @@ where
         me: Supervisor,
         incoming: mpsc::Receiver<SupervisorMessage>,
     ) -> error::Result<()> {
-        let repo = git::TempRepo::new("preduce-supervisor")?;
-
         let num_workers = opts.num_workers();
         let num_reducers = opts.reducers().len();
         let reducers_without_actors = opts.take_reducers();
@@ -213,7 +195,6 @@ where
             logger_handle: logger_handle,
             sigint: sigint,
             sigint_handle: sigint_handle,
-            repo: repo,
             worker_id_counter: 0,
             workers: HashMap::with_capacity(num_workers),
             idle_workers: Vec::with_capacity(num_workers),
@@ -223,9 +204,7 @@ where
             reducers_without_actors,
             exhausted_reducers: HashSet::with_capacity(num_reducers),
             reduction_queue: ReductionQueue::with_capacity(num_reducers),
-            interesting_counter: 0,
             oracle: Default::default(),
-            resets_since_gc: 0,
         };
 
         supervisor.backup_original_test_case()?;
@@ -287,10 +266,9 @@ where
                     self.enqueue_worker_for_reduction(who);
                 }
 
-                SupervisorMessage::ReportInteresting(who, downstream, interesting) => {
+                SupervisorMessage::ReportInteresting(who, interesting) => {
                     self.handle_new_interesting_test_case(
                         who,
-                        downstream,
                         orig_size,
                         smallest_interesting,
                         interesting,
@@ -373,7 +351,6 @@ where
 
                 SupervisorMessage::ReplyNextReduction(reducer, reduction) => {
                     assert!(self.reducer_actors.contains_key(&reducer.id()));
-                    debug_assert!(self.repo.find_object(reduction.parent(), None).is_ok());
 
                     if reduction.size() < smallest_interesting.size() {
                         let priority = self.oracle.predict(&reduction);
@@ -441,13 +418,6 @@ where
         drop(self.logger);
         self.logger_handle.join()?;
 
-        // Print how we got here.
-        println!("git log --graph");
-        ::std::process::Command::new("git")
-            .args(&["log", "--graph"])
-            .current_dir(self.repo.path())
-            .status()
-            .unwrap();
         println!(
             "====================================================================================="
         );
@@ -516,12 +486,10 @@ where
 
     /// Given that the `who` worker just found a new interesting test case,
     /// either update our globally smallest interesting test case, or tell the
-    /// worker to try and merge its test case with our smaller test case, and
-    /// retest for interesting-ness.
+    /// worker to try testing a new reduction.
     fn handle_new_interesting_test_case(
         &mut self,
         who: Worker,
-        downstream: path::PathBuf,
         orig_size: u64,
         smallest_interesting: &mut test_case::Interesting,
         interesting: test_case::Interesting,
@@ -534,7 +502,10 @@ where
         // Allow not strictly smaller new "smallest" interesting test cases to
         // allow reducers like clang-format to enable further reductions down
         // the line, even if it technically adds indentation.
-        if new_size < old_size || interesting.parent() == Some(smallest_interesting.commit_id()) {
+        if new_size < old_size
+        // TODO FITZGEN: add some kind of parent id again?
+        // || interesting.parent() == Some(smallest_interesting.commit_id())
+        {
             // We have a new globally smallest insteresting test case! First,
             // update the original test case file with the new interesting
             // reduction. The reduction process can take a LONG time, and if the
@@ -546,23 +517,6 @@ where
                 .observe_smallest_interesting(&smallest_interesting);
             self.logger
                 .new_smallest(smallest_interesting.clone(), orig_size);
-
-            // Second, reset our repo's HEAD to the new interesting test case's
-            // commit.
-            self.repo
-                .fetch_and_reset_hard(downstream, smallest_interesting.commit_id())?;
-            {
-                let tag_name = format!("interesting-{}", self.interesting_counter);
-                self.interesting_counter += 1;
-                let commit = self.repo.head_commit()?;
-                self.repo
-                    .tag(&tag_name, commit.as_object(), &git::signature(), "", false)?;
-                if self.resets_since_gc > self.opts.git_gc_threshold {
-                    self.repo.gc()?;
-                    self.resets_since_gc = 0;
-                }
-                self.resets_since_gc += 1;
-            }
 
             // Third, re-seed our reducer actors with the new test case, and
             // respawn any workers that might have shutdown because we exhausted
@@ -592,18 +546,14 @@ where
             // smallest test case.
             self.enqueue_worker_for_reduction(who);
         } else {
-            // Although the test case is interesting, it is not smaller. Tell
-            // the worker to try and merge it with our current smallest
-            // interesting test case and see if that is also interesting and
-            // even smaller than both our current smallest and the
-            // interesting-but-not-smaller test case.
+            // Although the test case is interesting, it is not smaller. This is
+            // the unlikely case where we find two new interesting test cases at
+            // the same time, the smaller of the two reports back first, and
+            // then the larger finishes and reports back before it is told to
+            // abandon its current is-interesting test and move on to new work.
             self.oracle.observe_not_smallest_interesting(&interesting);
             self.logger.is_not_smaller(interesting);
-            if self.opts.should_try_merging() {
-                who.try_merge(old_size, self.repo.head_id()?);
-            } else {
-                self.enqueue_worker_for_reduction(who);
-            }
+            self.enqueue_worker_for_reduction(who);
         }
 
         Ok(())
@@ -639,11 +589,7 @@ where
 
     /// Verify that the initial, unreduced test case is itself interesting.
     fn verify_initially_interesting(&mut self) -> error::Result<test_case::Interesting> {
-        let initial = test_case::Interesting::initial(
-            &self.opts.test_case,
-            self.opts.predicate(),
-            &self.repo,
-        )?;
+        let initial = test_case::Interesting::initial(&self.opts.test_case, self.opts.predicate())?;
         let initial = initial.ok_or(error::Error::InitialTestCaseNotInteresting)?;
         Ok(initial)
     }
@@ -663,8 +609,6 @@ where
                     self.opts.predicate().clone(),
                     self.me.clone(),
                     self.logger.clone(),
-                    self.repo.path(),
-                    self.opts.git_gc_threshold,
                 )?;
                 Ok((id, worker))
             })

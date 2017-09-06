@@ -67,12 +67,6 @@ fn parse_args() -> clap::ArgMatches<'static> {
                 .help("Print histograms when finished."),
         )
         .arg(
-            clap::Arg::with_name("no_merging")
-                .short("n")
-                .long("no-merging")
-                .help("Do not attempt to do merges of interesting test cases."),
-        )
-        .arg(
             clap::Arg::with_name("lazily_reseed")
                 .short("l")
                 .long("lazily-reseed")
@@ -89,28 +83,7 @@ fn parse_args() -> clap::ArgMatches<'static> {
                 .long("shuffle")
                 .help(
                     "Shuffle reductions to be tested for interestingness as they are \
-                     generated in the hope that this will cause fewer merge conflicts when \
-                     combining two interesting test cases into a third reduction.",
-                ),
-        )
-        .arg(
-            clap::Arg::with_name("git_gc_threshold")
-                .short("g")
-                .long("git-gc-threshold")
-                .takes_value(true)
-                .value_name("GIT_GC_THRESHOLD")
-                .default_value("20")
-                .validator(|a| {
-                    let num = a.parse::<usize>().map_err(|e| format!("{}", e))?;
-                    if num > 0 {
-                        Ok(())
-                    } else {
-                        Err("GIT_GC_THRESHOLD must be a number greater than 0".into())
-                    }
-                })
-                .help(
-                    "Set the number of git operations performed on a repository before running \
-                     `git gc`. This prevents repository sizes from growing wihout bound.",
+                     generated.",
                 ),
         )
         .get_matches()
@@ -154,17 +127,6 @@ fn try_main() -> error::Result<()> {
     if args.is_present("print-histograms") {
         options = options.print_histograms(true);
     }
-
-    if args.is_present("no_merging") {
-        options = options.try_merging(false);
-    }
-
-    // For args with a default value, value_of will always succeed.
-    let git_gc_threshold = args.value_of("git_gc_threshold")
-        .unwrap()
-        .parse::<usize>()
-        .unwrap();
-    options = options.git_gc_threshold(git_gc_threshold);
 
     options.run()
 }

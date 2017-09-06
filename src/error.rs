@@ -1,6 +1,5 @@
 //! Custom errors and results.
 
-use git2;
 use std::any::Any;
 use std::error;
 use std::fmt;
@@ -10,9 +9,6 @@ use std::path;
 /// The kinds of errors that can happen when running `preduce`.
 #[derive(Debug)]
 pub enum Error {
-    /// A git error.
-    Git(git2::Error),
-
     /// An IO error.
     Io(io::Error),
 
@@ -30,15 +26,11 @@ pub enum Error {
 
     /// There is no file at the given path, when we expected one.
     DoesNotExist(path::PathBuf),
-
-    /// Running `git gc` on a repository failed.
-    GitGcFailed,
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error> {
         match *self {
-            Error::Git(ref e) => write!(f, "git: {}", e),
             Error::Io(ref e) => fmt::Display::fmt(e, f),
             Error::Thread(ref e) => write!(f, "Thread panicked: {:?}", e),
             Error::MisbehavingReducerScript(ref details) => {
@@ -54,7 +46,6 @@ impl fmt::Display for Error {
             Error::DoesNotExist(ref file_path) => {
                 write!(f, "The file does not exist: {}", file_path.display())
             }
-            Error::GitGcFailed => write!(f, "Running `git gc` on a repository failed"),
         }
     }
 }
@@ -62,7 +53,6 @@ impl fmt::Display for Error {
 impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            Error::Git(ref e) => error::Error::description(e),
             Error::Io(ref e) => error::Error::description(e),
             Error::Thread(_) => "A panicked thread",
             Error::MisbehavingReducerScript(_) => "Misbehaving reducer script",
@@ -71,7 +61,6 @@ impl error::Error for Error {
                 "The initial test case did not pass the is-interesting predicate"
             }
             Error::DoesNotExist(_) => "There is no file at the given path, but we expected one",
-            Error::GitGcFailed => "Running `git gc` on a repository failed",
         }
     }
 }
@@ -79,12 +68,6 @@ impl error::Error for Error {
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Error::Io(e)
-    }
-}
-
-impl From<git2::Error> for Error {
-    fn from(e: git2::Error) -> Self {
-        Error::Git(e)
     }
 }
 

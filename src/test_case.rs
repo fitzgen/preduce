@@ -3,8 +3,6 @@
 
 use either::{Either, Left, Right};
 use error;
-use git::{self, RepoExt};
-use git2;
 use std::fs;
 use std::io;
 use std::path;
@@ -50,12 +48,8 @@ impl Eq for TempFileInner {}
 
 /// An immutable, temporary file within a temporary directory.
 ///
-/// When generating reductions, we never use a git repository's copy of its
-/// smallest reduced test case because that can always change out from under our
-/// feet at any time, which would then trigger bugs in any reducer or predicate
-/// that was using it. Instead, we only use these immutable, persistent
-/// temporary files, that are automatically cleaned up once they're no longer in
-/// use.
+/// When generating reductions, we use these immutable, persistent, temporary
+/// files, that are automatically cleaned up once they're no longer in use.
 ///
 /// These temporary files and directories are atomically reference counted.
 /// There are no cycles because of both the lack of internal `RefCell`s to
@@ -138,10 +132,6 @@ pub struct PotentialReduction {
     /// From which reducer did this potential reduction came from?
     provenance: String,
 
-    /// The commit id of the seed test case from which this potential reduction
-    /// was generated.
-    parent: git2::Oid,
-
     /// The temporary file containing the reduced test case.
     test_case: TempFile,
 
@@ -198,26 +188,10 @@ impl PotentialReduction {
 
         Ok(PotentialReduction {
             provenance: provenance,
-            parent: seed.commit_id(),
             test_case: test_case,
             size: size,
             delta: seed.size().saturating_sub(size),
         })
-    }
-
-    /// Get the commit id of the interesting test case that this reduction was
-    /// generated from.
-    pub fn parent(&self) -> git2::Oid {
-        self.parent
-    }
-
-    fn make_commit_message(&self) -> String {
-        format!(
-            "{} - {} - {}",
-            self.provenance,
-            self.size(),
-            self.path().display()
-        )
     }
 
     /// Try and convert this *potential* reduction into an *interesting* test
@@ -226,27 +200,18 @@ impl PotentialReduction {
     pub fn into_interesting<I>(
         self,
         judge: &I,
-        repo: &git2::Repository,
     ) -> error::Result<Either<Interesting, PotentialReduction>>
     where
         I: ?Sized + traits::IsInteresting,
     {
-        assert_eq!(repo.state(), git2::RepositoryState::Clean);
         assert!(self.path().is_file());
 
         if !judge.is_interesting(self.path())? {
             return Ok(Right(self));
         }
 
-        let repo_test_case_path = repo.test_case_path()?;
-        fs::copy(self.path(), &repo_test_case_path)?;
-
-        let msg = self.make_commit_message();
-        let commit_id = repo.commit_test_case(&msg)?;
-
         Ok(Left(Interesting {
             kind: InterestingKind::Reduction(self),
-            commit_id: commit_id,
         }))
     }
 }
@@ -256,9 +221,6 @@ impl PotentialReduction {
 pub struct Interesting {
     /// The kind of interesting test case.
     kind: InterestingKind,
-
-    /// The commit id for this test case.
-    commit_id: git2::Oid,
 }
 
 impl TestCaseMethods for Interesting {
@@ -282,17 +244,11 @@ impl TestCaseMethods for Interesting {
 impl Interesting {
     /// Construct the initial interesting test case with the given `judge` of
     /// whether a test case is interesting or not.
-    pub fn initial<P, I>(
-        file_path: P,
-        judge: &I,
-        repo: &git::TempRepo,
-    ) -> error::Result<Option<Interesting>>
+    pub fn initial<P, I>(file_path: P, judge: &I) -> error::Result<Option<Interesting>>
     where
         P: AsRef<path::Path>,
         I: traits::IsInteresting,
     {
-        assert_eq!(repo.state(), git2::RepositoryState::Clean);
-
         // Create a new immutable temp file for seeding reducers with the
         // initial test case.
         let dir = Arc::new(tempdir::TempDir::new("preduce-initial")?);
@@ -311,33 +267,12 @@ impl Interesting {
 
         let size = fs::metadata(temp_file.path())?.len();
 
-        // Copy to the repository's test case path and make a commit.
-        let repo_test_case_path = repo.test_case_path()?;
-        fs::copy(file_path.as_ref(), &repo_test_case_path)?;
-        let msg = format!("Initial - {} - {}", size, temp_file.path().display());
-        let commit_id = repo.commit_test_case(&msg)?;
-
         Ok(Some(Interesting {
             kind: InterestingKind::Initial(InitialInteresting {
                 test_case: temp_file,
                 size: size,
             }),
-            commit_id: commit_id,
         }))
-    }
-
-    /// Get the commit id of this interesting test case.
-    pub fn commit_id(&self) -> git2::Oid {
-        self.commit_id
-    }
-
-    /// Get this interesting test case's parent interesting test case's commit
-    /// id. Returns `None` if this is the initial interesting test case.
-    pub fn parent(&self) -> Option<git2::Oid> {
-        match self.kind {
-            InterestingKind::Initial(_) => None,
-            InterestingKind::Reduction(ref r) => Some(r.parent()),
-        }
     }
 }
 
@@ -416,7 +351,6 @@ impl PotentialReduction {
     pub fn testing_only_new() -> PotentialReduction {
         PotentialReduction {
             provenance: "PotentialReduction::testing_only_new".into(),
-            parent: git2::Oid::from_bytes(&[0; 20]).unwrap(),
             test_case: TempFile::anonymous().unwrap(),
             size: 0,
             delta: 0,
@@ -432,7 +366,6 @@ impl Interesting {
                 test_case: TempFile::anonymous().unwrap(),
                 size: 0,
             }),
-            commit_id: git2::Oid::from_bytes(&[0; 20]).unwrap(),
         }
     }
 }
@@ -440,16 +373,16 @@ impl Interesting {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use git::{RepoExt, TempRepo};
     use std::fs;
     use std::io::{Read, Write};
     use std::path;
+    use tempdir::TempDir;
 
     #[test]
     fn interesting_initial_true() {
-        let repo = TempRepo::new("interesting_initial_true").expect("should create temp repo");
+        let dir = TempDir::new("interesting_initial_true").expect("should create temp dir");
 
-        let mut path = path::PathBuf::from(repo.path());
+        let mut path = path::PathBuf::from(dir.path());
         path.pop();
         path.push("initial");
         {
@@ -460,18 +393,21 @@ mod tests {
         let judge = |_: &path::Path| Ok(true);
         let judge = &judge;
 
-        let interesting = Interesting::initial(path, &judge, &repo)
+        let interesting = Interesting::initial(&path, &judge)
             .expect("should not error")
             .expect("and should find the initial test case interesting");
 
-        let repo_test_case_path = repo.test_case_path().unwrap();
         assert!(
-            repo_test_case_path.is_file(),
-            "The repo path should have a file now"
+            interesting.path() != &path,
+            "the initial file should be copied into a temp file once found interesting"
+        );
+        assert!(
+            interesting.path().is_file(),
+            "The dir path should have a file now"
         );
 
         let mut file =
-            fs::File::open(&repo_test_case_path).expect("The repo test case file should open");
+            fs::File::open(interesting.path()).expect("The dir test case file should open");
 
         let mut contents = String::new();
         file.read_to_string(&mut contents)
@@ -491,37 +427,34 @@ mod tests {
 
     #[test]
     fn interesting_initial_false() {
-        let repo = TempRepo::new("interesting_initial_false").expect("should create temp repo");
         let temp_file = TempFile::anonymous().unwrap();
         fs::File::create(temp_file.path()).unwrap();
 
         let judge = |_: &path::Path| Ok(false);
         let judge = &judge;
 
-        let interesting =
-            Interesting::initial(temp_file.path(), &judge, &repo).expect("should not error");
+        let interesting = Interesting::initial(temp_file.path(), &judge).expect("should not error");
         assert!(interesting.is_none());
     }
 
     #[test]
     fn interesting_initial_error() {
-        let repo = TempRepo::new("interesting_initial_error").expect("should create temp repo");
         let temp_file = TempFile::anonymous().unwrap();
         fs::File::create(temp_file.path()).unwrap();
 
-        let judge = |_: &path::Path| Err(error::Error::Git(git2::Error::from_str("woops")));
+        let judge = |_: &path::Path| Err(error::Error::InitialTestCaseNotInteresting);
         let judge = &judge;
 
-        let result = Interesting::initial(temp_file.path(), &judge, &repo);
+        let result = Interesting::initial(temp_file.path(), &judge);
         assert!(result.is_err());
     }
 
 
     #[test]
     fn into_interesting() {
-        let repo = TempRepo::new("into_interesting").expect("should create temp repo");
+        let dir = TempDir::new("into_interesting").expect("should create temp dir");
 
-        let mut initial_path = path::PathBuf::from(repo.path());
+        let mut initial_path = path::PathBuf::from(dir.path());
         initial_path.pop();
         initial_path.push("initial");
         {
@@ -532,7 +465,7 @@ mod tests {
         let judge = |_: &path::Path| Ok(true);
         let judge = &judge;
 
-        let interesting = Interesting::initial(initial_path, &judge, &repo)
+        let interesting = Interesting::initial(initial_path, &judge)
             .expect("interesting should be ok")
             .expect("interesting should be some");
 
@@ -547,7 +480,7 @@ mod tests {
 
         let interesting_reduction = reduction
             .clone()
-            .into_interesting(&judge, &repo)
+            .into_interesting(&judge)
             .expect("interesting reduction should be ok")
             .left()
             .expect("interesting reduction should be some");
@@ -558,14 +491,13 @@ mod tests {
             "The interesting reduction's path should be the same as the potential reduction's path"
         );
 
-        let repo_test_case_path = repo.test_case_path().unwrap();
         assert!(
-            repo_test_case_path.is_file(),
-            "The repo should now have a copy at its canonical test case path"
+            interesting_reduction.path().is_file(),
+            "The interesting reduction's path should have a file"
         );
 
-        let mut file = fs::File::open(&repo_test_case_path)
-            .expect("The repo test case path should have a file");
+        let mut file = fs::File::open(&interesting_reduction.path())
+            .expect("The interesting reduction path should have a file");
         let mut contents = String::new();
         file.read_to_string(&mut contents)
             .expect("And we should read from that file");

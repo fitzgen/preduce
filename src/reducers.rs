@@ -446,14 +446,9 @@ where
 
 /// Shuffle the order of the generated reductions from the reducer `R`.
 ///
-/// Reducers generally tend to produce reductions starting at the beginning of
-/// the seed test case and then, as they are drained, generate reductions
-/// towards the end of the seed test case. This behavior can cause more merge
-/// conflicts than is otherwise necessary.
-///
-/// The `Shuffle` reducer combinator helps alleviate this issue: it eagerly
-/// generates potential reductions from its sub-reducer and then shuffles the
-/// reductions as `next_potential_reduction` is called.
+/// The `Shuffle` reducer combinator eagerly generates potential reductions from
+/// its sub-reducer and then shuffles the reductions returned as
+/// `next_potential_reduction` is called.
 ///
 /// ### Example
 ///

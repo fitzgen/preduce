@@ -7,10 +7,11 @@ use std::path;
 use std::process::Command;
 
 fn test_preduce_run<P, Q, R, I>(test_case: P, predicate: Q, reducers: I)
-    where P: AsRef<path::Path>,
-          Q: AsRef<path::Path>,
-          R: AsRef<path::Path>,
-          I: IntoIterator<Item=R>,
+where
+    P: AsRef<path::Path>,
+    Q: AsRef<path::Path>,
+    R: AsRef<path::Path>,
+    I: IntoIterator<Item = R>,
 {
     let stdout = io::stdout();
     let _stdout = stdout.lock();
@@ -30,12 +31,19 @@ fn test_preduce_run<P, Q, R, I>(test_case: P, predicate: Q, reducers: I)
         .arg("run")
         .arg(copy_of_test_case.display().to_string())
         .arg(predicate.as_ref().display().to_string())
-        .args(reducers.into_iter().map(|r| r.as_ref().display().to_string()))
+        .args(
+            reducers
+                .into_iter()
+                .map(|r| r.as_ref().display().to_string()),
+        )
         .status()
         .expect("should run preduce OK");
     assert!(status.success(), "preduce should exit OK");
 
-    let expected = path::Path::new("tests/expectations").join(test_case.file_name().unwrap()).display().to_string();
+    let expected = path::Path::new("tests/expectations")
+        .join(test_case.file_name().unwrap())
+        .display()
+        .to_string();
     let actual = copy_of_test_case.display().to_string();
 
     let status = Command::new("diff")
@@ -93,15 +101,15 @@ test_preduce_runs! {
 }
 
 fn test_reducer<P, Q, I, R>(reducer: P, seed: Q, expecteds: I)
-    where P: AsRef<path::Path>,
-          Q: AsRef<path::Path>,
-          R: AsRef<path::Path>,
-          I: IntoIterator<Item=R>,
+where
+    P: AsRef<path::Path>,
+    Q: AsRef<path::Path>,
+    R: AsRef<path::Path>,
+    I: IntoIterator<Item = R>,
 {
     let judge = preduce::interesting::NonEmpty;
 
-    let repo = preduce::git::TempRepo::new("test_reducer").expect("should create temp repo OK");
-    let seed = preduce::test_case::Interesting::initial(seed, &judge, &repo)
+    let seed = preduce::test_case::Interesting::initial(seed, &judge)
         .expect("should run interesting test OK")
         .expect("should be interesting");
 
@@ -109,7 +117,8 @@ fn test_reducer<P, Q, I, R>(reducer: P, seed: Q, expecteds: I)
     reducer.set_seed(seed);
 
     for expected in expecteds {
-        let reduction = reducer.next_potential_reduction()
+        let reduction = reducer
+            .next_potential_reduction()
             .expect("should generate next reduction OK")
             .expect("should not be exhausted");
 

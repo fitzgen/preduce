@@ -15,14 +15,12 @@
 extern crate ctrlc;
 extern crate either;
 extern crate fixedbitset;
-extern crate git2;
 extern crate histo;
 extern crate num_cpus;
 extern crate tempdir;
 
 mod actors;
 pub mod error;
-pub mod git;
 pub mod interesting;
 pub mod oracle;
 mod queue;
@@ -37,8 +35,6 @@ mod test_utils;
 
 use std::mem;
 use std::path;
-
-const DEFAULT_GIT_GC_THRESHOLD: usize = 20;
 
 /// A builder to configure a `preduce` run's options, and finally start the
 /// reduction process.
@@ -68,8 +64,6 @@ where
     reducers: Vec<Box<traits::Reducer>>,
     workers: usize,
     print_histograms: bool,
-    try_merging: bool,
-    git_gc_threshold: usize,
 }
 
 /// APIs for configuring options and spawning the reduction process.
@@ -113,8 +107,6 @@ where
             reducers: reducers,
             workers: num_cpus::get(),
             print_histograms: false,
-            try_merging: true,
-            git_gc_threshold: DEFAULT_GIT_GC_THRESHOLD,
         }
     }
 
@@ -155,37 +147,6 @@ where
         self
     }
 
-    /// Whether we should try merging the globally smallest interesting test
-    /// case with an interesting but not smallest test case, to see if that
-    /// merge is smaller and also interesting.
-    ///
-    /// By default, `preduce` will try merging.
-    ///
-    /// ```
-    /// # fn _ignore() -> preduce::error::Result<()> {
-    /// let predicate = preduce::interesting::Script::new("is_interesting.sh")?;
-    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
-    /// let test_case = "path/to/test-case";
-    ///
-    /// let opts = preduce::Options::new(predicate, vec![Box::new(reducer)], test_case)
-    ///     // Do not try merges.
-    ///     .try_merging(false);
-    /// # let _ = opts;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn try_merging(mut self, should_try_merging: bool) -> Options<I> {
-        self.try_merging = should_try_merging;
-        self
-    }
-
-    /// Sets the number of git operations performed on a repository before
-    /// running `git gc`. This prevents runaway repository size.
-    pub fn git_gc_threshold(mut self, git_gc_threshold: usize) -> Options<I> {
-        self.git_gc_threshold = git_gc_threshold;
-        self
-    }
-
     /// Finish configuration and run the test case reduction process to
     /// completion.
     ///
@@ -222,11 +183,6 @@ where
     pub fn num_workers(&self) -> usize {
         assert!(self.workers > 0);
         self.workers
-    }
-
-    /// Get whether this `Options` is configured to try merging or not.
-    pub fn should_try_merging(&self) -> bool {
-        self.try_merging
     }
 
     /// Get this `Options`' `IsInteresting` predicate.
