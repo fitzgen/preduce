@@ -16,6 +16,7 @@ extern crate ctrlc;
 extern crate either;
 extern crate fixedbitset;
 extern crate histo;
+extern crate is_executable;
 extern crate num_cpus;
 extern crate tempdir;
 

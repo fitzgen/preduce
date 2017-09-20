@@ -1,6 +1,7 @@
 //! Implementations of the `IsInteresting` trait.
 
 use error;
+use is_executable::IsExecutable;
 use std::fs;
 use std::panic::UnwindSafe;
 use std::path;
@@ -98,6 +99,10 @@ impl Script {
     {
         if !program.as_ref().is_file() {
             return Err(error::Error::DoesNotExist(program.as_ref().into()));
+        }
+
+        if !program.as_ref().is_executable() {
+            return Err(error::Error::PredicateScriptIsNotExecutable(program.as_ref().into()));
         }
 
         let program = program.as_ref().canonicalize()?;
@@ -284,6 +289,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use error;
     use std::fs;
     use std::io::Write;
     use std::path;
@@ -395,5 +401,15 @@ mod tests {
         let test = &test;
         let test_case = temp_file();
         assert!(!test.is_interesting(test_case.path()).unwrap());
+    }
+
+    #[test]
+    fn not_executable() {
+        match Script::new("./tests/fixtures/lorem-ipsum.txt") {
+            Err(error::Error::PredicateScriptIsNotExecutable(_)) => {}
+            otherwise => {
+                panic!("Expected Error::PredicateScriptIsNotExecutable, found {:?}", otherwise);
+            }
+        }
     }
 }
