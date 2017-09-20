@@ -102,7 +102,7 @@ impl Script {
         }
 
         if !program.as_ref().is_executable() {
-            return Err(error::Error::PredicateScriptIsNotExecutable(program.as_ref().into()));
+            return Err(error::Error::IsNotExecutable(program.as_ref().into()));
         }
 
         let program = program.as_ref().canonicalize()?;
@@ -406,9 +406,9 @@ mod tests {
     #[test]
     fn not_executable() {
         match Script::new("./tests/fixtures/lorem-ipsum.txt") {
-            Err(error::Error::PredicateScriptIsNotExecutable(_)) => {}
+            Err(error::Error::IsNotExecutable(_)) => {}
             otherwise => {
-                panic!("Expected Error::PredicateScriptIsNotExecutable, found {:?}", otherwise);
+                panic!("Expected Error::IsNotExecutable, found {:?}", otherwise);
             }
         }
     }

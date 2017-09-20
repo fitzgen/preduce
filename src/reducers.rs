@@ -3,6 +3,7 @@
 extern crate rand;
 
 use error;
+use is_executable::IsExecutable;
 use std::borrow::Cow;
 use std::io::{Read, Write};
 use std::path;
@@ -127,6 +128,10 @@ impl Script {
     {
         if !program.as_ref().is_file() {
             return Err(error::Error::DoesNotExist(program.as_ref().into()));
+        }
+
+        if !program.as_ref().is_executable() {
+            return Err(error::Error::IsNotExecutable(program.as_ref().into()));
         }
 
         let program = program.as_ref().canonicalize()?;
@@ -959,5 +964,15 @@ mod tests {
         assert!(reducer.next_potential_reduction().unwrap().is_none());
         assert!(reducer.next_potential_reduction().unwrap().is_none());
         assert!(reducer.next_potential_reduction().unwrap().is_none());
+    }
+
+    #[test]
+    fn not_executable() {
+        match Script::new("./tests/fixtures/lorem-ipsum.txt") {
+            Err(error::Error::IsNotExecutable(_)) => {}
+            otherwise => {
+                panic!("Expected Error::IsNotExecutable, found {:?}", otherwise);
+            }
+        }
     }
 }
