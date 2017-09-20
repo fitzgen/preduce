@@ -7,6 +7,7 @@ dependencies = [
  "either 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fixedbitset 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "histo 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "is_executable 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -77,6 +78,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "streaming-stats 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "is_executable"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "kernel32-sys"
@@ -258,6 +264,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum either 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "18785c1ba806c258137c937e44ada9ee7e69a37e3c72077542cd2f069d78562a"
 "checksum fixedbitset 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "fcf4412e2d11115c5ed81c2fbdaba8028de0c92553497aa771fc5f4e0c5c8793"
 "checksum histo 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5a4195184b16b1e8e50353b41f83ad743b80d687b4c41a6f1d0d50231325e258"
+"checksum is_executable 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c16560f5b427baa1c46e9c112b76c0ededfa051ae23ab2e741a930ef3223e5a8"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum libc 0.2.26 (registry+https://github.com/rust-lang/crates.io-index)" = "30885bcb161cf67054244d10d4a7f4835ffd58773bc72e07d35fecf472295503"
 "checksum num 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)" = "a311b77ebdc5dd4cf6449d81e4135d9f0e3b153839ac90e648a8ef538f923525"

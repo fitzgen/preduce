@@ -24,6 +24,9 @@ pub enum Error {
     /// The initial test case did not pass the is-interesting predicate.
     InitialTestCaseNotInteresting,
 
+    /// An "is interesting?" predicate script was not executable.
+    IsNotExecutable(path::PathBuf),
+
     /// There is no file at the given path, when we expected one.
     DoesNotExist(path::PathBuf),
 }
@@ -43,6 +46,9 @@ impl fmt::Display for Error {
                 f,
                 "The initial test case did not pass the is-interesting predicate"
             ),
+            Error::IsNotExecutable(ref file_path) => {
+                write!(f, "The script is not executable: {}", file_path.display())
+            }
             Error::DoesNotExist(ref file_path) => {
                 write!(f, "The file does not exist: {}", file_path.display())
             }
@@ -59,6 +65,9 @@ impl error::Error for Error {
             Error::TestCaseBackupFailure(_) => "Could not backup initial test case",
             Error::InitialTestCaseNotInteresting => {
                 "The initial test case did not pass the is-interesting predicate"
+            }
+            Error::IsNotExecutable(_) => {
+                "The script is not executable"
             }
             Error::DoesNotExist(_) => "There is no file at the given path, but we expected one",
         }
