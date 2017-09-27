@@ -50,6 +50,10 @@ impl Reducer for Box<Reducer> {
 ///
 /// All file paths are encoded in UTF-8.
 ///
+/// If `preduce` does not need any more reductions from the reducer script, it
+/// will write a '\n' byte to `stdin` with no preceeding path. Upon receipt, the
+/// reducer script should exit cleanly, cleaning up after itself as needed.
+///
 /// ### Example Reducer Script
 ///
 /// This example reducer script tries removing prefixes of the seed test case:
@@ -69,6 +73,11 @@ impl Reducer for Box<Reducer> {
 /// for (( i=1 ; i < n; i++ )); do
 ///     # Read the file path and '\n' from stdin.
 ///     read -r reduction_path
+///
+///     # Check to see if `preduce` is telling us to shut down.
+///     if [[ "$reduction_path" == "" ]]; then
+///         exit
+///     fi
 ///
 ///     # Generate the potential reduction in a new file.
 ///     tail -n "$i" "$seed" > "$reduction_path"
