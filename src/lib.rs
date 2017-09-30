@@ -20,6 +20,10 @@ extern crate is_executable;
 extern crate num_cpus;
 extern crate tempdir;
 
+#[macro_use]
+#[cfg(test)]
+extern crate lazy_static;
+
 mod actors;
 pub mod error;
 pub mod interesting;

@@ -17,7 +17,7 @@ where
     let _stdout = stdout.lock();
 
     let test_case = test_case.as_ref();
-    let copy_of_test_case = test_case.with_extension(".preduce-run");
+    let copy_of_test_case = test_case.with_extension("preduce-run");
     let status = Command::new("cp")
         .args(&[
             test_case.display().to_string(),
@@ -114,11 +114,14 @@ where
         .expect("should be interesting");
 
     let mut reducer = preduce::reducers::Script::new(reducer).expect("should create reducer OK");
-    reducer.set_seed(seed);
+    let mut state = reducer.new_state(&seed).expect("reducer should create new state");
 
     for expected in expecteds {
-        let reduction = reducer
-            .next_potential_reduction()
+        state = reducer.next_state(&seed, &state)
+            .expect("should call next_state OK")
+            .expect("and next_state should return Some");
+
+        let reduction =  reducer.reduce(&seed, &state)
             .expect("should generate next reduction OK")
             .expect("should not be exhausted");
 
