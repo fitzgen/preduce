@@ -460,7 +460,7 @@ mod tests {
 
         assert_eq!(
             interesting.size(),
-            contents.len() as _,
+            contents.len() as u64,
             "And the test case should have the expected size"
         );
     }
@@ -545,7 +545,7 @@ mod tests {
 
         assert_eq!(
             interesting_reduction.size(),
-            contents.len() as _,
+            contents.len() as u64,
             "And the test case should have the expected size"
         );
     }

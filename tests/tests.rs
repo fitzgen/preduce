@@ -114,25 +114,30 @@ where
         .expect("should be interesting");
 
     let mut reducer = preduce::reducers::Script::new(reducer).expect("should create reducer OK");
-    let mut state = reducer.new_state(&seed).expect("reducer should create new state");
+    let state = reducer.new_state(&seed).expect("reducer should create new state");
+    let mut state = Some(state);
 
     for expected in expecteds {
-        state = reducer.next_state(&seed, &state)
-            .expect("should call next_state OK")
-            .expect("and next_state should return Some");
+        let next_state = {
+            let state_ref = state.as_ref().expect("Expecting another reduction, should have state");
 
-        let reduction =  reducer.reduce(&seed, &state)
-            .expect("should generate next reduction OK")
-            .expect("should not be exhausted");
+            let reduction = reducer.reduce(&seed, state_ref)
+                .expect("should generate next reduction OK")
+                .expect("should not be exhausted");
 
-        let expected = expected.as_ref().display().to_string();
-        let actual = reduction.path().display().to_string();
+            let expected = expected.as_ref().display().to_string();
+            let actual = reduction.path().display().to_string();
 
-        let status = Command::new("diff")
-            .args(&["-U8", &expected, &actual])
-            .status()
-            .expect("should run diff OK");
-        assert!(status.success(), "diff should exit OK");
+            let status = Command::new("diff")
+                .args(&["-U8", &expected, &actual])
+                .status()
+                .expect("should run diff OK");
+            assert!(status.success(), "diff should exit OK");
+
+            reducer.next_state(&seed, state_ref)
+                .expect("should call next_state OK")
+        };
+        state = next_state;
     }
 }
 
@@ -208,7 +213,7 @@ test_reducers! {
         ]
     }
     chunks => {
-        "reducers/chunks.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-chunks"),
         seeded with "tests/fixtures/lorem-ipsum.txt",
         generates [
             "tests/expectations/chunks-0",
