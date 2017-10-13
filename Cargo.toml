@@ -20,6 +20,14 @@ num_cpus = "1.3.0"
 rand = "0.3.15"
 tempdir = "0.3.5"
 
+[dependencies.preduce_ipc_types]
+path = "./preduce_ipc_types"
+version = "0.1.0"
+
+[dependencies.preduce_reducer_script]
+path = "./preduce_reducer_script"
+version = "0.1.0"
+
 [dependencies.signpost]
 optional = true
 version = "0.1.0"
@@ -33,3 +41,5 @@ path = "src/lib.rs"
 debug = true
 [target."cfg(unix)".dependencies]
 libc = "0.2.26"
+
+[workspace]
