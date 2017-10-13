@@ -4,10 +4,15 @@ extern crate rand;
 
 use error;
 use is_executable::IsExecutable;
+use preduce_ipc_types::{FastForwardRequest, NewRequest, NextOnInterestingRequest, NextRequest,
+                        ReduceRequest, Request};
+use preduce_ipc_types::{FastForwardResponse, NewResponse, NextOnInterestingResponse, NextResponse,
+                        ReduceResponse, Response};
+use serde_json;
 use std::any::Any;
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::io::{Read, Write};
+use std::io::{self, BufRead, Write};
 use std::path;
 use std::process;
 use std::sync::Arc;
@@ -75,54 +80,11 @@ impl Reducer for Box<Reducer> {
 ///
 /// ### IPC Protocol
 ///
-/// The seed test case is given as the first and only argument to the script.
-///
-/// When `preduce` would like the next potential reduction of the seed test case
-/// to be generated, it will write a file path followed by a '\n' byte to
-/// `stdin`. Upon reading this path and newline, the script must generate the
-/// next reduction at that path. Once generation of the reduction is complete,
-/// the script must write a '\n' byte to `stdout`. Alternatively, if the
-/// subprocess has exhausted all of its potential reductions, then it may simply
-/// exit without printing anything.
-///
-/// All file paths are encoded in UTF-8.
-///
-/// If `preduce` does not need any more reductions from the reducer script, it
-/// will write a '\n' byte to `stdin` with no preceeding path. Upon receipt, the
-/// reducer script should exit cleanly, cleaning up after itself as needed.
+/// TODO FITZGEN
 ///
 /// ### Example Reducer Script
 ///
-/// This example reducer script tries removing prefixes of the seed test case:
-///
-/// ```bash
-/// #!/usr/bin/env bash
-///
-/// # The initial seed test case is the first and only argument.
-/// seed="$1"
-///
-/// # Count how many lines are in the test case.
-/// n=$(wc -l "$seed" | cut -d ' ' -f 1)
-///
-/// # Generate a potential reduction of the seed's last line, then its last 2
-/// # lines, then its last 3 lines, etc...
-///
-/// for (( i=1 ; i < n; i++ )); do
-///     # Read the file path and '\n' from stdin.
-///     read -r reduction_path
-///
-///     # Check to see if `preduce` is telling us to shut down.
-///     if [[ "$reduction_path" == "" ]]; then
-///         exit
-///     fi
-///
-///     # Generate the potential reduction in a new file.
-///     tail -n "$i" "$seed" > "$reduction_path"
-///
-///     # Tell `preduce` that we are done generating the potential reduction.
-///     echo
-/// done
-/// ```
+/// TODO FITZGEN
 ///
 /// ### Example Rust Usage
 ///
@@ -159,24 +121,9 @@ pub struct Script {
     program: path::PathBuf,
     out_dir: Option<Arc<tempdir::TempDir>>,
     counter: usize,
-    seed: Option<test_case::Interesting>,
     child: Option<process::Child>,
-    child_stdout: Option<process::ChildStdout>,
+    child_stdout: Option<io::BufReader<process::ChildStdout>>,
     strict: bool,
-}
-
-#[cfg(debug)]
-fn slurp<P: AsRef<path::Path>>(p: P) -> error::Result<Vec<u8>> {
-    let mut contents = Vec::new();
-    let mut file = fs::File::open(p)?;
-    file.read_to_end(&mut contents)?;
-    contents
-}
-
-#[cfg(not(debug))]
-#[inline(always)]
-fn slurp<P: AsRef<path::Path>>(_p: P) -> error::Result<()> {
-    Ok(())
 }
 
 impl Script {
@@ -199,7 +146,6 @@ impl Script {
             program: program,
             out_dir: None,
             counter: 0,
-            seed: None,
             child: None,
             child_stdout: None,
             strict: false,
@@ -214,17 +160,7 @@ impl Script {
         self.strict = be_strict;
     }
 
-    fn set_seed(&mut self, seed: test_case::Interesting) {
-        self.seed = Some(seed);
-
-        // If we have an extant child process, shut it down now. We'll start a new
-        // child process with the new seed the next time
-        // `next_potential_reduction` is invoked.
-        self.shutdown_child();
-    }
-
     fn spawn_child(&mut self) -> error::Result<()> {
-        assert!(self.seed.is_some());
         assert!(self.out_dir.is_none());
         assert!(self.child.is_none());
         assert!(self.child_stdout.is_none());
@@ -233,13 +169,12 @@ impl Script {
 
         let mut cmd = process::Command::new(&self.program);
         cmd.current_dir(self.out_dir.as_ref().unwrap().path())
-            .arg(self.seed.as_ref().unwrap().path())
             .stdin(process::Stdio::piped())
             .stdout(process::Stdio::piped());
 
         let mut child = cmd.spawn()?;
         let stdout = child.stdout.take().unwrap();
-        self.child_stdout = Some(stdout);
+        self.child_stdout = Some(io::BufReader::new(stdout));
         self.child = Some(child);
 
         Ok(())
@@ -250,11 +185,15 @@ impl Script {
     /// up any resources it was using (e.g. temporary files).
     fn shutdown_child(&mut self) {
         if let Some(mut child) = self.child.take() {
-            if {
-                write!(child.stdin.as_mut().unwrap(), "\n")
-                    .and_then(|_| child.wait())
-                    .is_err()
-            } {
+            if (|| -> error::Result<()> {
+                {
+                    let mut child_stdin = child.stdin.as_mut().unwrap();
+                    serde_json::to_writer(&mut child_stdin, &Request::Shutdown)?;
+                    writeln!(&mut child_stdin)?;
+                }
+                child.wait()?;
+                Ok(())
+            })().is_err() {
                 self.kill_child();
             }
             self.child_stdout = None;
@@ -276,106 +215,47 @@ impl Script {
         file_name.push_str(&self.counter.to_string());
         self.counter += 1;
 
-        let mut file_path = path::PathBuf::from(file_name);
-        if let Some(ext) = self.seed.as_ref().unwrap().path().extension() {
-            file_path.set_extension(ext);
-        }
-
+        let file_path = path::PathBuf::from(file_name);
         test_case::TempFile::new(self.out_dir.as_ref().unwrap().clone(), file_path)
     }
 
-    fn next_potential_reduction_impl(
-        &mut self,
-    ) -> error::Result<Option<test_case::PotentialReduction>> {
-        assert!(self.out_dir.is_some() && self.child.is_some() && self.child_stdout.is_some());
+    fn misbehaving_reducer_script<T>(&mut self, details: String) -> error::Result<T> {
+        self.kill_child();
+        Err(error::Error::MisbehavingReducerScript(details))
+    }
 
-        let before_seed_contents = slurp(self.seed.as_ref().unwrap().path())?;
+    fn downcast(state: &Box<Any + Send>) -> &serde_json::Value {
+        state.downcast_ref::<serde_json::Value>().unwrap()
+    }
 
-        let temp_file = self.next_temp_file().or_else(|e| {
-            self.kill_child();
-            Err(e)
-        })?;
+    fn request(&mut self, request: Request) -> error::Result<Response> {
+        assert!(self.child.is_some());
+        assert!(self.child_stdout.is_some());
 
-        // Write the desired path of the next reduction to the child's stdin. If
-        // this fails, then the child already exited, presumably because it
-        // determined it could not generate any reductions from the test file.
-        if {
+        match (|| {
             let child = self.child.as_mut().unwrap();
-            let child_stdin = child.stdin.as_mut().unwrap();
-            write!(child_stdin, "{}\n", temp_file.path().display()).is_err()
-        } {
-            self.kill_child();
-            return Ok(None);
-        }
+            let mut stdin = child.stdin.as_mut().unwrap();
+            serde_json::to_writer(&mut stdin, &request)?;
+            writeln!(&mut stdin)?;
 
-        // Read the newline response from the child's stdout, indicating that
-        // the child has finished generating the reduction.
-        let mut newline = [0];
-        if {
-            let child_stdout = self.child_stdout.as_mut().unwrap();
-            child_stdout.read_exact(&mut newline).is_err()
-        } {
-            self.kill_child();
-            return Ok(None);
-        }
-
-        if newline[0] != b'\n' {
-            self.kill_child();
-            let details = format!(
-                "'{}' is not conforming to the reducer script protocol: \
-                 expected a newline response",
-                self.program.to_string_lossy()
-            );
-            return Err(error::Error::MisbehavingReducerScript(details));
-        }
-
-        if !temp_file.path().is_file() {
-            self.kill_child();
-            let details = format!(
-                "'{}' did not generate a test case file at {}",
-                self.program.to_string_lossy(),
-                temp_file.path().display()
-            );
-            return Err(error::Error::MisbehavingReducerScript(details));
-        }
-
-        let after_seed_contents = slurp(self.seed.as_ref().unwrap().path())?;
-        if before_seed_contents != after_seed_contents {
-            let details = format!(
-                "seed file was modified while '{}' generated its next reduction",
-                self.program.to_string_lossy()
-            );
-            return Err(error::Error::MisbehavingReducerScript(details));
-        }
-
-        let reduction = test_case::PotentialReduction::new(
-            self.seed.clone().unwrap(),
-            self.program.to_string_lossy(),
-            temp_file,
-        )?;
-
-        if self.strict {
-            let seed_size = self.seed.as_ref().unwrap().size();
-            if reduction.size() >= seed_size {
+            let stdout = self.child_stdout.as_mut().unwrap();
+            let mut line = String::new();
+            stdout.read_line(&mut line)?;
+            let response: Response = serde_json::from_str(&line)?;
+            Ok(response)
+        })() {
+            r @ Ok(_) => r,
+            e @ Err(_) => {
                 self.kill_child();
-                let details = format!(
-                    "'{}' is generating reductions that are greater than or equal the seed's size: \
-                     {} >= {}",
-                    self.program.to_string_lossy(),
-                    reduction.size(),
-                    seed_size
-                );
-                return Err(error::Error::MisbehavingReducerScript(details));
+                e
             }
         }
-
-        Ok(Some(reduction))
     }
 }
 
 impl Drop for Script {
     fn drop(&mut self) {
-        self.kill_child();
+        self.shutdown_child();
     }
 }
 
@@ -385,14 +265,13 @@ impl Reducer for Script {
     }
 
     fn clone_boxed(&self) -> Box<Reducer>
-        where
+    where
         Self: 'static,
     {
         Box::new(Script {
             program: self.program.clone(),
             out_dir: None,
             counter: 0,
-            seed: None,
             child: None,
             child_stdout: None,
             strict: self.strict,
@@ -400,51 +279,172 @@ impl Reducer for Script {
     }
 
     fn new_state(&mut self, seed: &test_case::Interesting) -> error::Result<Box<Any + Send>> {
-        self.set_seed(seed.clone());
-        Ok(Box::new(()))
+        if self.child.is_none() {
+            self.spawn_child()?;
+        }
+
+        let response = self.request(Request::New(NewRequest { seed: seed.path().into() }))?;
+        match response {
+            Response::New(NewResponse { state }) => Ok(Box::new(state)),
+            otherwise => {
+                let program = self.program.to_string_lossy().to_string();
+                self.misbehaving_reducer_script(format!(
+                    "Expected a `Response::New` in response to a `Request::New` request; \
+                     got `{:?}` from '{}'",
+                    otherwise,
+                    program
+                ))
+            }
+        }
     }
 
-    fn clone_state(&self, _: &Box<Any + Send>) -> Box<Any + Send> {
-        Box::new(())
+    fn clone_state(&self, state: &Box<Any + Send>) -> Box<Any + Send> {
+        Box::new(Self::downcast(state).clone())
     }
 
     fn next_state(
         &mut self,
-        _: &test_case::Interesting,
-        _: &Box<Any + Send>
+        seed: &test_case::Interesting,
+        state: &Box<Any + Send>
     ) -> error::Result<Option<Box<Any + Send>>> {
-        Ok(Some(Box::new(())))
+        // It's possible that we killed the child for misbehaving since we
+        // generated this state, so we can't assert that the child exists.
+        if self.child.is_none() {
+            self.spawn_child()?;
+        }
+
+        let state = Self::downcast(state);
+        let response = self.request(Request::Next(NextRequest {
+            seed: seed.path().into(),
+            state: state.clone(),
+        }))?;
+
+        match response {
+            Response::Next(NextResponse { next_state }) => {
+                Ok(next_state.map(|ns| Box::new(ns) as Box<Any + Send>))
+            }
+            otherwise => {
+                let program = self.program.to_string_lossy().to_string();
+                self.misbehaving_reducer_script(format!(
+                    "Expected a `Response::Next` in response to a `Request::Next` request; \
+                     got `{:?}` from '{}'",
+                    otherwise,
+                    program
+                ))
+            }
+        }
     }
 
     fn next_state_on_interesting(
         &mut self,
         new_seed: &test_case::Interesting,
-        _old_seed: &test_case::Interesting,
-        _prev_state: &Box<Any + Send>
+        old_seed: &test_case::Interesting,
+        state: &Box<Any + Send>
     ) -> error::Result<Option<Box<Any + Send>>> {
-        Ok(Some(self.new_state(new_seed)?))
-    }
-
-    fn reduce(
-        &mut self,
-        _: &test_case::Interesting,
-        _: &Box<Any + Send>
-    ) -> error::Result<Option<test_case::PotentialReduction>> {
-        assert!(
-            self.seed.is_some(),
-            "Must be initialized with calls to set_seed before asking for potential \
-             reductions"
-        );
-
         if self.child.is_none() {
             self.spawn_child()?;
         }
 
-        match self.next_potential_reduction_impl() {
-            result @ Ok(_) => result,
-            result @ Err(_) => {
-                self.kill_child();
-                result
+        let state = Self::downcast(state);
+        let response = self.request(Request::NextOnInteresting(NextOnInterestingRequest {
+            new_seed: new_seed.path().into(),
+            old_seed: old_seed.path().into(),
+            state: state.clone(),
+        }))?;
+
+        match response {
+            Response::NextOnInteresting(NextOnInterestingResponse { next_state }) => {
+                Ok(next_state.map(|ns| Box::new(ns) as Box<Any + Send>))
+            }
+            otherwise => {
+                let program = self.program.to_string_lossy().to_string();
+                self.misbehaving_reducer_script(format!(
+                    "Expected a `Response::NextOnInteresting` in response to a \
+                     `Request::NextOnInteresting` request; got `{:?}` from '{}'",
+                    otherwise,
+                    program
+                ))
+            }
+        }
+    }
+
+    fn fast_forward_states(
+        &mut self,
+        seed: &test_case::Interesting,
+        n: usize,
+        state: &Box<Any + Send>
+    ) -> error::Result<Option<Box<Any + Send>>> {
+        if self.child.is_none() {
+            self.spawn_child()?;
+        }
+
+        let state = Self::downcast(state);
+        let response = self.request(Request::FastForward(FastForwardRequest {
+            seed: seed.path().into(),
+            n,
+            state: state.clone(),
+        }))?;
+
+        match response {
+            Response::FastForward(FastForwardResponse { next_state }) => {
+                Ok(next_state.map(|ns| Box::new(ns) as Box<Any + Send>))
+            }
+            otherwise => {
+                let program = self.program.to_string_lossy().to_string();
+                self.misbehaving_reducer_script(format!(
+                    "Expected a `Response::FastForward` in response to a `Request::FastForward` \
+                     request; got `{:?}` from '{}'",
+                    otherwise,
+                    program
+                ))
+            }
+        }
+    }
+
+    fn reduce(
+        &mut self,
+        seed: &test_case::Interesting,
+        state: &Box<Any + Send>
+    ) -> error::Result<Option<test_case::PotentialReduction>> {
+        if self.child.is_none() {
+            self.spawn_child()?;
+        }
+
+        let state = Self::downcast(state);
+        let temp_file = self.next_temp_file()?;
+        let response = self.request(Request::Reduce(ReduceRequest {
+            seed: seed.path().into(),
+            state: state.clone(),
+            dest: temp_file.path().into(),
+        }))?;
+
+        match response {
+            Response::Reduce(ReduceResponse { reduced: true }) => {
+                if !temp_file.path().is_file() {
+                    let program = self.program.to_string_lossy().to_string();
+                    return self.misbehaving_reducer_script(format!(
+                        "'{}' did not generate a test case file at {}",
+                        program,
+                        temp_file.path().display()
+                    ));
+                }
+                Ok(Some(test_case::PotentialReduction::new(
+                    seed.clone(),
+                    self.program.to_string_lossy(),
+                    temp_file
+                )?))
+            }
+            Response::Reduce(ReduceResponse { reduced: false }) => {
+                Ok(None)
+            }
+            otherwise => {
+                let program = self.program.to_string_lossy().to_string();
+                self.misbehaving_reducer_script(format!(
+                    "Expected a `Response::Reduce` in response to a `Request::Reduce` request; \
+                     got {:?} from '{}'",
+                    otherwise,
+                    program
+                ))
             }
         }
     }
