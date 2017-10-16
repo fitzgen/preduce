@@ -259,7 +259,7 @@ test_reducers! {
         ]
     }
     clang_delta_reduce_class_template_param => {
-        "reducers/clang-delta-reduce-class-template-param.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clang-delta-reduce-class-template-param"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/clang-delta-reduce-class-template-param-0",

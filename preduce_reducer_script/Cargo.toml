@@ -5,6 +5,8 @@ version = "0.1.0"
 workspace = ".."
 
 [dependencies]
+is_executable = "0.1.0"
+lazy_static = "0.2.9"
 serde = "1.0.15"
 serde_derive = "1.0.15"
 serde_json = "1.0.3"

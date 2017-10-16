@@ -16,13 +16,18 @@ path = "reducers/blank.rs"
 
 [[bin]]
 doc = false
-name = "preduce-reducer-clang-format"
-path = "reducers/clang-format.rs"
+name = "preduce-reducer-chunks"
+path = "reducers/chunks.rs"
 
 [[bin]]
 doc = false
-name = "preduce-reducer-chunks"
-path = "reducers/chunks.rs"
+name = "preduce-reducer-clang-delta-reduce-class-template-param"
+path = "reducers/clang-delta-reduce-class-template-param.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clang-format"
+path = "reducers/clang-format.rs"
 
 [dependencies]
 clap = "2.23.1"
