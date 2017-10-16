@@ -85,8 +85,7 @@ test_preduce_runs! {
         "tests/fixtures/lorem-ipsum.txt",
         judged by "tests/predicates/has-lorem.sh",
         reductions by [
-            "reducers/chunks.py",
-            "reducers/lines.py",
+            concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-chunks"),
         ]
     }
     class_nine => {
@@ -94,7 +93,7 @@ test_preduce_runs! {
         judged by "tests/predicates/class-nine-compiles.sh",
         reductions by [
             "reducers/balanced-curly.py",
-            "reducers/lines.py",
+            concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-chunks"),
             "reducers/clang-delta-reduce-class-template-param.py",
         ]
     }
@@ -250,16 +249,6 @@ test_reducers! {
             "tests/expectations/chunks-6",
             "tests/expectations/chunks-7",
             "tests/expectations/chunks-8",
-        ]
-    }
-    lines => {
-        "reducers/lines.py",
-        seeded with "tests/fixtures/lorem-ipsum.txt",
-        generates [
-            "tests/expectations/lines-0",
-            "tests/expectations/lines-1",
-            "tests/expectations/lines-2",
-            "tests/expectations/lines-3",
         ]
     }
     clang_format => {
