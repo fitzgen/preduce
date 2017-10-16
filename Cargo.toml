@@ -14,6 +14,11 @@ doc = false
 name = "preduce-reducer-chunks"
 path = "reducers/chunks.rs"
 
+[[bin]]
+doc = false
+name = "preduce-reducer-blank"
+path = "reducers/blank.rs"
+
 [dependencies]
 clap = "2.23.1"
 ctrlc = "3.0.2"

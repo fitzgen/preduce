@@ -229,7 +229,7 @@ test_reducers! {
         ]
     }
     blank => {
-        "reducers/blank.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-blank"),
         seeded with "tests/fixtures/wow.cpp",
         generates [
             "tests/expectations/blank-0",

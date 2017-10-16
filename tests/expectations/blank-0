@@ -4,7 +4,6 @@ struct Wow {
     template <class T>
     struct Such {
         T t;
-
         struct Many {
             bool b;
             int i;
@@ -12,7 +11,6 @@ struct Wow {
         };
     };
 };
-
 long long beard() {
     return 42;
 }
