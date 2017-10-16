@@ -11,13 +11,18 @@ path = "src/bin/preduce.rs"
 
 [[bin]]
 doc = false
-name = "preduce-reducer-chunks"
-path = "reducers/chunks.rs"
+name = "preduce-reducer-blank"
+path = "reducers/blank.rs"
 
 [[bin]]
 doc = false
-name = "preduce-reducer-blank"
-path = "reducers/blank.rs"
+name = "preduce-reducer-clang-format"
+path = "reducers/clang-format.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-chunks"
+path = "reducers/chunks.rs"
 
 [dependencies]
 clap = "2.23.1"

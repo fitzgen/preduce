@@ -252,7 +252,7 @@ test_reducers! {
         ]
     }
     clang_format => {
-        "reducers/clang-format.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clang-format"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/clang-format-0",
