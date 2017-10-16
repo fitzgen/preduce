@@ -3,99 +3,45 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-use preduce_reducer_script::{Reducer, run};
+use preduce_reducer_script::{RemoveRanges, run_ranges};
 use std::fs;
-use std::io::{self, BufRead, Write};
+use std::io::{self, Read};
+use std::ops;
 use std::path::PathBuf;
 
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-struct Chunks {
-    num_lines: u64,
-    chunk_size: u64,
-    index: u64
-}
+#[derive(Debug, Deserialize, Serialize)]
+struct Chunks;
 
-impl Reducer for Chunks {
-    type Error = io::Error;
-
-    fn new(seed: PathBuf) -> io::Result<Self> {
-        let num_lines = preduce_reducer_script::count_lines(seed)?;
-        let chunk_size = num_lines;
-        let index = 0;
-
-        Ok(Chunks {
-            num_lines,
-            chunk_size,
-            index,
-        })
-    }
-
-    fn next(mut self, _seed: PathBuf) -> io::Result<Option<Self>> {
-        assert!(self.chunk_size > 0);
-        assert!(self.chunk_size <= self.num_lines);
-
-        self.index += 1;
-        Ok(if self.index == self.num_lines - (self.chunk_size - 1) {
-            if self.chunk_size == 1 {
-                None
-            } else {
-                self.chunk_size /= 2;
-                self.index = 0;
-                Some(self)
-            }
-        } else {
-            Some(self)
-        })
-    }
-
-    fn next_on_interesting(mut self, _old_seed: PathBuf, _new_seed: PathBuf) -> io::Result<Option<Self>> {
-        assert!(self.chunk_size > 0);
-        assert!(self.chunk_size <= self.num_lines);
-
-        self.num_lines -= self.chunk_size;
-        if self.num_lines == 0 {
-            return Ok(None);
-        }
-
-        if self.index >= self.num_lines - (self.chunk_size - 1) {
-            self.index = 0;
-        }
-
-        Ok(Some(self))
-    }
-
-    fn reduce(self, seed: PathBuf, dest: PathBuf) -> io::Result<bool> {
-        assert!(self.chunk_size > 0);
-        assert!(self.chunk_size <= self.num_lines);
-
-        if self.index >= self.num_lines {
-            return Ok(false);
-        }
-
+impl RemoveRanges for Chunks {
+    fn remove_ranges(seed: PathBuf) -> io::Result<Vec<ops::Range<u64>>> {
         let seed = fs::File::open(seed)?;
         let mut seed = io::BufReader::new(seed);
 
-        let dest = fs::File::create(dest)?;
-        let mut dest = io::BufWriter::new(dest);
+        let mut ranges = vec![];
 
-        let mut line = String::new();
+        const BUF_SIZE: usize = 1024 * 1024;
+        let mut buf: Vec<u8> = vec![0; BUF_SIZE];
 
-        for _ in 0..self.index {
-            line.clear();
-            seed.read_line(&mut line)?;
-            dest.write_all(line.as_bytes())?;
+        let mut start_of_line = 0;
+        let mut current_index = 0;
+        let mut bytes_read;
+        while {
+            bytes_read = seed.read(&mut buf)?;
+            bytes_read > 0
+        } {
+            for b in &buf[0..bytes_read] {
+                current_index += 1;
+                if *b == b'\n' {
+                    ranges.push(start_of_line..current_index);
+                    start_of_line = current_index;
+                }
+            }
         }
 
-        for _ in 0..self.chunk_size {
-            line.clear();
-            seed.read_line(&mut line)?;
-        }
-
-        io::copy(&mut seed, &mut dest)?;
-        Ok(true)
+        Ok(ranges)
     }
 }
 
 fn main() {
-    run::<Chunks>()
+    run_ranges::<Chunks>()
 }

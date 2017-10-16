@@ -109,6 +109,7 @@ where
 {
     let judge = preduce::interesting::NonEmpty;
 
+    let seed_string = seed.as_ref().display().to_string();
     let seed = preduce::test_case::Interesting::initial(seed, &judge)
         .expect("should run interesting test OK")
         .expect("should be interesting");
@@ -128,11 +129,35 @@ where
             let expected = expected.as_ref().display().to_string();
             let actual = reduction.path().display().to_string();
 
-            let status = Command::new("diff")
-                .args(&["-U8", &expected, &actual])
-                .status()
+            let output = Command::new("diff")
+                .args(&["-U8", &seed_string, &actual])
+                .output()
                 .expect("should run diff OK");
-            assert!(status.success(), "diff should exit OK");
+
+            println!();
+            println!();
+            println!();
+            println!("=======================================================");
+            println!("Actual reduction generated is:");
+            println!("-------------------------------------------------------");
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            println!("=======================================================");
+            println!();
+            println!();
+            println!();
+            println!("=======================================================");
+            println!("Diff with expected reduction generated is:");
+            println!("-------------------------------------------------------");
+
+            let output = Command::new("diff")
+                .args(&["-U8", &expected, &actual])
+                .output()
+                .expect("should run diff OK");
+
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            println!("=======================================================");
+
+            assert!(output.status.success(), "diff should exit OK");
 
             reducer.next_state(&seed, state_ref)
                 .expect("should call next_state OK")
@@ -214,7 +239,7 @@ test_reducers! {
     }
     chunks => {
         concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-chunks"),
-        seeded with "tests/fixtures/lorem-ipsum.txt",
+        seeded with "tests/fixtures/lines.txt",
         generates [
             "tests/expectations/chunks-0",
             "tests/expectations/chunks-1",
@@ -223,6 +248,8 @@ test_reducers! {
             "tests/expectations/chunks-4",
             "tests/expectations/chunks-5",
             "tests/expectations/chunks-6",
+            "tests/expectations/chunks-7",
+            "tests/expectations/chunks-8",
         ]
     }
     lines => {

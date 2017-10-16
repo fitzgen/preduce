@@ -126,6 +126,8 @@ fn main() {
 
 extern crate preduce_ipc_types;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
 
 use preduce_ipc_types::{FastForwardRequest, NewRequest, NextOnInterestingRequest, NextRequest,
@@ -133,9 +135,14 @@ use preduce_ipc_types::{FastForwardRequest, NewRequest, NextOnInterestingRequest
 use preduce_ipc_types::{FastForwardResponse, NewResponse, NextOnInterestingResponse, NextResponse,
                         ReduceResponse, Response};
 use serde::{Deserialize, Serialize};
+use std::cmp;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, Read, Seek, Write};
+use std::iter::FromIterator;
+use std::marker::PhantomData;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -259,6 +266,310 @@ trait InfallibleReducer: Reducer {
 
 impl<T: Reducer> InfallibleReducer for T {}
 
+/// A trait for describing a set of byte offset ranges in the test case to try
+/// removing.
+///
+/// After defining this trait for your type `MyRanges`, you can run a reducer
+/// script that generates potential reductions with those ranges removed from
+/// the seed test case with `run_ranges::<MyRanges>()`. The resulting reducer
+/// script will try removing all of the given ranges at once, then half of the
+/// ranges at a time, then each quarter at a time, eighth at a time, ..., and
+/// finally removing each range one at a time.
+///
+/// ### Example
+///
+/// Finding the ranges of all the `//`-style comments in a file, and then
+/// running a reducer that tries removing those ranges.
+///
+/// ```
+/// use preduce_reducer_script::{run_ranges, RemoveRanges};
+/// use std::fs;
+/// use std::io::{self, BufRead};
+/// use std::ops::Range;
+/// use std::path::PathBuf;
+///
+/// struct Comments;
+///
+/// impl RemoveRanges for Comments {
+///     fn remove_ranges(seed: PathBuf) -> io::Result<Vec<Range<u64>>> {
+///         let mut ranges = vec![];
+///
+///         let file = fs::File::open(seed)?;
+///         let mut file = io::BufReader::new(file);
+///
+///         let mut offset = 0u64;
+///         let mut line = String::new();
+///         while {
+///             line.clear();
+///             file.read_line(&mut line)? > 0
+///         } {
+///             if line.trim().starts_with("//") {
+///                 ranges.push(offset..offset + line.len() as u64)
+///             }
+///             offset += line.len() as u64;
+///         }
+///
+///         Ok(ranges)
+///     }
+/// }
+///
+/// fn main() {
+/// #   #![allow(unreachable_code)]
+/// #   return;
+///     run_ranges::<Comments>()
+/// }
+/// ```
+pub trait RemoveRanges {
+    /// Generate a set of ranges to try removing from the given seed test case.
+    ///
+    /// For all ranges, `range.start < range.end` must hold.
+    fn remove_ranges(seed: PathBuf) -> io::Result<Vec<Range<u64>>>;
+
+    /// How should the ranges be sorted?
+    ///
+    /// By default, the ranges will be sorted by largest range, breaking ties
+    /// with `range.start` such that we try removing from the end of the seed
+    /// test case before removing from the beginning. We prefer large ranges
+    /// because we want to remove the most we can from the test case, as quickly
+    /// as possible. We remove from the back before the front on the assumption
+    /// that it is less likely to mess with dependencies between functions
+    /// defined in the test case (assuming it is a programming language source
+    /// file).
+    ///
+    /// If you desire a different sorting behavior, override the definition of
+    /// this method.
+    fn sort_ranges_by(a: &Range<u64>, b: &Range<u64>) -> cmp::Ordering {
+        let a_len = a.end - a.start;
+        let b_len = b.end - b.start;
+        let big = a_len.cmp(&b_len).reverse();
+        let start = a.start.cmp(&b.start).reverse();
+        big.then(start)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+struct RemoveRangesReducer<R>
+where
+    R: RemoveRanges,
+{
+    remove_ranges: PhantomData<R>,
+    ranges: Vec<Range<u64>>,
+    chunk_size: usize,
+    index: usize,
+}
+
+impl<R> RemoveRangesReducer<R>
+where
+    R: RemoveRanges,
+{
+    fn get_ranges_in_chunk(&self) -> &[Range<u64>] {
+        let start = self.index;
+        let end = self.index + self.chunk_size;
+        &self.ranges[start..end]
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OrdByStart(Range<u64>);
+
+impl cmp::PartialOrd for OrdByStart {
+    #[inline]
+    fn partial_cmp(&self, rhs: &Self) -> Option<cmp::Ordering> {
+        Some(cmp::Ord::cmp(self, rhs))
+    }
+}
+
+impl cmp::Ord for OrdByStart {
+    #[inline]
+    fn cmp(&self, rhs: &Self) -> cmp::Ordering {
+        self.0
+            .start
+            .cmp(&rhs.0.start)
+            .then(self.0.end.cmp(&rhs.0.end))
+    }
+}
+
+impl<R> Reducer for RemoveRangesReducer<R>
+where
+    R: RemoveRanges,
+{
+    type Error = io::Error;
+
+    fn new(seed: PathBuf) -> io::Result<Self> {
+        let mut ranges = R::remove_ranges(seed)?;
+        assert!(
+            ranges.iter().all(|r| r.start < r.end),
+            "Empty and big..little ranges are not allowed"
+        );
+
+        ranges.sort_unstable_by(R::sort_ranges_by);
+        ranges.dedup();
+
+        let chunk_size = ranges.len();
+        let index = 0;
+
+        Ok(RemoveRangesReducer {
+            remove_ranges: PhantomData,
+            ranges,
+            chunk_size,
+            index,
+        })
+    }
+
+    fn next(mut self, _seed: PathBuf) -> io::Result<Option<Self>> {
+        assert!(self.chunk_size > 0);
+        assert!(self.chunk_size <= self.ranges.len());
+
+        self.index += 1;
+
+        if self.index == self.ranges.len() - (self.chunk_size - 1) {
+            if self.chunk_size == 1 {
+                Ok(None)
+            } else {
+                self.chunk_size /= 2;
+                self.index = 0;
+                Ok(Some(self))
+            }
+        } else {
+            Ok(Some(self))
+        }
+    }
+
+    fn next_on_interesting(
+        mut self,
+        _old_seed: PathBuf,
+        _new_seed: PathBuf,
+    ) -> io::Result<Option<Self>> {
+        let start_removed = self.index;
+        let end_removed = self.index + self.chunk_size;
+        let (mut removed, mut ranges) = self.ranges
+            .drain(..)
+            .map(OrdByStart)
+            .enumerate()
+            .partition::<Vec<_>, _>(|&(i, _)| start_removed <= i && i < end_removed);
+
+        let mut ranges: Vec<_> = ranges.drain(..).map(|(_, r)| r).collect();
+        ranges.sort_unstable();
+        if ranges.is_empty() {
+            return Ok(None);
+        }
+
+        let removed: Vec<_> = removed.drain(..).map(|(_, r)| r).collect();
+        ranges.sort_unstable();
+        assert!(!removed.is_empty());
+
+        self.ranges = ranges
+            .drain(..)
+            .filter_map(|r| {
+                let mut delta_start = 0;
+                let mut delta_end = 0;
+
+                for s in &removed {
+                    assert!(r != *s);
+
+                    //                      [--------- s --------)
+                    // [------- r ----------)
+                    if r.0.end <= s.0.start {
+                        break;
+                    }
+
+                    // [------ s -----)
+                    //                [------- r -------)
+                    if s.0.end <= r.0.start {
+                        let s_len = s.0.end - s.0.start;
+                        delta_start += s_len;
+                        delta_end += s_len;
+                        continue;
+                    }
+
+                    //      [------ s -----)
+                    // [----------- r -----------)
+                    if r.0.start <= s.0.start && s.0.end < r.0.end {
+                        delta_end += s.0.end - s.0.start;
+                        continue;
+                    }
+
+                    // Either
+                    //
+                    // [----------- s -----------)
+                    //      [------ r -----)
+                    //
+                    // or
+                    //
+                    //     [--------- s ---------)
+                    //                     [---------- r ---------)
+                    //
+                    // or
+                    //
+                    //                     [--------- s ---------)
+                    //     [---------- r ---------)
+                    return None;
+                }
+
+                let new_start = r.0.start - delta_start;
+                let new_end = r.0.end - delta_end;
+                assert!(new_start < new_end);
+
+                Some(new_start..new_end)
+            })
+            .collect();
+        if self.ranges.is_empty() {
+            return Ok(None);
+        }
+
+        self.ranges.sort_unstable_by(R::sort_ranges_by);
+
+        if self.chunk_size > self.ranges.len() {
+            self.chunk_size = self.ranges.len();
+        }
+
+        if self.index >= self.ranges.len() - (self.chunk_size - 1) {
+            self.index = 0;
+        }
+
+        Ok(Some(self))
+    }
+
+    fn reduce(self, seed: PathBuf, dest: PathBuf) -> io::Result<bool> {
+        assert!(self.chunk_size > 0);
+        assert!(self.chunk_size <= self.ranges.len());
+
+        let ranges =
+            BTreeSet::from_iter(self.get_ranges_in_chunk().iter().cloned().map(OrdByStart));
+
+        let seed = fs::File::open(seed)?;
+        let mut seed = io::BufReader::new(seed);
+
+        let dest = fs::File::create(dest)?;
+        let mut dest = io::BufWriter::new(dest);
+
+        const BUF_SIZE: usize = 1024 * 1024;
+        let mut buf: Vec<u8> = vec![0; BUF_SIZE];
+
+        let mut offset = 0;
+        for r in ranges {
+            if offset < r.0.start {
+                let mut to_write = r.0.start - offset;
+
+                while to_write > BUF_SIZE as u64 {
+                    seed.read_exact(&mut buf)?;
+                    dest.write_all(&buf)?;
+                    to_write -= BUF_SIZE as u64;
+                }
+
+                seed.read_exact(&mut buf[0..to_write as usize])?;
+                dest.write_all(&buf[0..to_write as usize])?;
+            }
+
+            seed.seek(io::SeekFrom::Start(r.0.end))?;
+            offset = r.0.end;
+        }
+
+        io::copy(&mut seed, &mut dest)?;
+        Ok(true)
+    }
+}
+
 /// Drives a `Reducer` to completion.
 ///
 /// Deserializes incoming IPC requests, calls the appropriate method on the
@@ -339,6 +650,13 @@ fn try_run<R: Reducer>() -> io::Result<()> {
     Ok(())
 }
 
+/// Run a reducer script that removes ranges defined by `R`.
+///
+/// See `RemoveRanges` for details.
+pub fn run_ranges<R: RemoveRanges>() -> ! {
+    run::<RemoveRangesReducer<R>>()
+}
+
 /// Count the number of lines in the file at the given path.
 pub fn count_lines<P: AsRef<Path>>(path: P) -> io::Result<u64> {
     // TODO: this should really just read big buffers of bytes and then use the
@@ -358,4 +676,221 @@ pub fn count_lines<P: AsRef<Path>>(path: P) -> io::Result<u64> {
     }
 
     Ok(num_lines)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::RemoveRangesReducer;
+    use std::marker::PhantomData;
+
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+    struct TestRanges;
+
+    impl RemoveRanges for TestRanges {
+        fn remove_ranges(_: PathBuf) -> io::Result<Vec<Range<u64>>> {
+            Ok(vec![0..10, 3..5, 3..5, 5..16, 7..11])
+        }
+    }
+
+    #[test]
+    fn remove_ranges_next() {
+        let path = PathBuf::from("/dev/null");
+
+        let mut reducer = RemoveRangesReducer::<TestRanges>::new(path.clone()).unwrap();
+        assert_eq!(
+            reducer,
+            RemoveRangesReducer {
+                remove_ranges: PhantomData,
+                ranges: vec![5..16, 0..10, 7..11, 3..5],
+                chunk_size: 4,
+                index: 0,
+            }
+        );
+
+        for i in 0..3 {
+            reducer = reducer
+                .next(path.clone())
+                .expect("no error on next")
+                .expect("is some on next");
+            assert_eq!(
+                reducer,
+                RemoveRangesReducer {
+                    remove_ranges: PhantomData,
+                    ranges: vec![5..16, 0..10, 7..11, 3..5],
+                    chunk_size: 2,
+                    index: i,
+                }
+            )
+        }
+
+        for i in 0..4 {
+            reducer = reducer
+                .next(path.clone())
+                .expect("no error on next")
+                .expect("is some on next");
+            assert_eq!(
+                reducer,
+                RemoveRangesReducer {
+                    remove_ranges: PhantomData,
+                    ranges: vec![5..16, 0..10, 7..11, 3..5],
+                    chunk_size: 1,
+                    index: i,
+                }
+            )
+        }
+
+        assert!(reducer.next(path.clone()).expect("next is OK").is_none());
+    }
+
+    #[test]
+    fn remove_ranges_next_on_interesting() {
+        let path = PathBuf::from("/dev/null");
+
+        let reducer = RemoveRangesReducer::<TestRanges>::new(path.clone()).unwrap();
+
+        {
+            //                      [--------- s --------)
+            // [------- r ----------)
+            let mut reducer = reducer.clone();
+            reducer.ranges = vec![10..30, 0..10];
+            reducer.chunk_size = 1;
+            reducer.index = 0;
+
+            let next = reducer
+                .next_on_interesting(path.clone(), path.clone())
+                .expect("next_on_interesting should be OK")
+                .expect("next_on_interesting should be some");
+
+            assert_eq!(
+                next,
+                RemoveRangesReducer {
+                    remove_ranges: PhantomData,
+                    ranges: vec![0..10],
+                    chunk_size: 1,
+                    index: 0,
+                }
+            );
+        }
+
+        {
+            // [------ s -----)
+            //                [------- r -------)
+            let mut reducer = reducer.clone();
+            reducer.ranges = vec![0..10, 10..15];
+            reducer.chunk_size = 1;
+            reducer.index = 0;
+
+            let next = reducer
+                .next_on_interesting(path.clone(), path.clone())
+                .expect("next_on_interesting should be OK")
+                .expect("next_on_interesting should be some");
+
+            assert_eq!(
+                next,
+                RemoveRangesReducer {
+                    remove_ranges: PhantomData,
+                    ranges: vec![0..5],
+                    chunk_size: 1,
+                    index: 0,
+                }
+            );
+        }
+
+        //      [------ s -----)
+        // [----------- r -----------)
+        {
+            let mut reducer = reducer.clone();
+            reducer.ranges = vec![5..10, 0..15];
+            reducer.chunk_size = 1;
+            reducer.index = 0;
+
+            let next = reducer
+                .next_on_interesting(path.clone(), path.clone())
+                .expect("next_on_interesting should be OK")
+                .expect("next_on_interesting should be some");
+
+            assert_eq!(
+                next,
+                RemoveRangesReducer {
+                    remove_ranges: PhantomData,
+                    ranges: vec![0..10],
+                    chunk_size: 1,
+                    index: 0,
+                }
+            );
+        }
+
+        {
+            // [----------- s -----------)
+            //      [------ r -----)
+            let mut reducer = reducer.clone();
+            reducer.ranges = vec![0..10, 5..7];
+            reducer.chunk_size = 1;
+            reducer.index = 0;
+
+            assert!(
+                reducer
+                    .next_on_interesting(path.clone(), path.clone())
+                    .expect("next_on_interesting should be OK")
+                    .is_none()
+            );
+        }
+
+        {
+            // [--------- s ---------)
+            //                 [---------- r ---------)
+            let mut reducer = reducer.clone();
+            reducer.ranges = vec![0..10, 8..12];
+            reducer.chunk_size = 1;
+            reducer.index = 0;
+
+            assert!(
+                reducer
+                    .next_on_interesting(path.clone(), path.clone())
+                    .expect("next_on_interesting should be OK")
+                    .is_none()
+            );
+        }
+
+        {
+            //                 [--------- s ---------)
+            // [---------- r ---------)
+            let mut reducer = reducer.clone();
+            reducer.ranges = vec![8..15, 5..10];
+            reducer.chunk_size = 1;
+            reducer.index = 0;
+
+            assert!(
+                reducer
+                    .next_on_interesting(path.clone(), path.clone())
+                    .expect("next_on_interesting should be OK")
+                    .is_none()
+            );
+        }
+
+        {
+            // Removing multiple ranges from the middle of the set.
+            let mut reducer = reducer.clone();
+            reducer.ranges = vec![30..41, 20..30, 10..20, 5..10, 0..3, 3..5];
+            // Removing these two:                ~~~~~~  ~~~~~
+            reducer.chunk_size = 2;
+            reducer.index = 2;
+
+            let next = reducer
+                .next_on_interesting(path.clone(), path.clone())
+                .expect("next_on_interesting should be OK")
+                .expect("next_on_interesting should be some");
+
+            assert_eq!(
+                next,
+                RemoveRangesReducer {
+                    remove_ranges: PhantomData,
+                    ranges: vec![15..26, 5..15, 0..3, 3..5],
+                    chunk_size: 2,
+                    index: 2,
+                }
+            );
+        }
+    }
 }
