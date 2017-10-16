@@ -777,6 +777,24 @@ pub fn run_clang_delta<C: ClangDelta>() -> ! {
     run::<ClangDeltaReducer<C>>()
 }
 
+/// Declare and run a `clang_delta` reducer script.
+#[macro_export]
+macro_rules! clang_delta_reducer {
+    ( $transformation:expr ) => {
+        fn main() {
+            struct Reducer;
+
+            impl $crate::ClangDelta for Reducer {
+                fn transformation() -> &'static str {
+                    $transformation
+                }
+            }
+
+            $crate::run_clang_delta::<Reducer>()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -266,7 +266,7 @@ test_reducers! {
         ]
     }
     clang_delta_remove_unused_outer_class => {
-        "reducers/clang-delta-remove-unused-outer-class.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clang-delta-remove-unused-outer-class"),
         seeded with "tests/fixtures/wow.cpp",
         generates [
             "tests/expectations/clang-delta-remove-unused-outer-class-0",
