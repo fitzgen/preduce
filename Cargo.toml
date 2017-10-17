@@ -371,6 +371,106 @@ path = "reducers/clang-format.rs"
 
 [[bin]]
 doc = false
+name = "preduce-reducer-clex-define"
+path = "reducers/clex-define.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-delete-string"
+path = "reducers/clex-delete-string.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rename-toks"
+path = "reducers/clex-rename-toks.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-tok-pattern-4"
+path = "reducers/clex-rm-tok-pattern-4.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-1"
+path = "reducers/clex-rm-toks-1.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-10"
+path = "reducers/clex-rm-toks-10.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-11"
+path = "reducers/clex-rm-toks-11.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-12"
+path = "reducers/clex-rm-toks-12.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-13"
+path = "reducers/clex-rm-toks-13.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-14"
+path = "reducers/clex-rm-toks-14.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-15"
+path = "reducers/clex-rm-toks-15.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-16"
+path = "reducers/clex-rm-toks-16.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-2"
+path = "reducers/clex-rm-toks-2.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-3"
+path = "reducers/clex-rm-toks-3.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-4"
+path = "reducers/clex-rm-toks-4.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-5"
+path = "reducers/clex-rm-toks-5.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-6"
+path = "reducers/clex-rm-toks-6.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-7"
+path = "reducers/clex-rm-toks-7.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-8"
+path = "reducers/clex-rm-toks-8.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-clex-rm-toks-9"
+path = "reducers/clex-rm-toks-9.rs"
+
+[[bin]]
+doc = false
 name = "preduce-reducer-includes"
 path = "reducers/includes.rs"
 

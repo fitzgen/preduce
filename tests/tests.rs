@@ -129,7 +129,7 @@ where
             let actual = reduction.path().display().to_string();
 
             let output = Command::new("diff")
-                .args(&["-U8", &seed_string, &actual])
+                .args(&["-U100", &seed_string, &actual])
                 .output()
                 .expect("should run diff OK");
 
@@ -296,7 +296,7 @@ test_reducers! {
 #[cfg(not(travis_ci))]
 test_reducers! {
     clex_rename_toks => {
-        "reducers/clex-rename-toks.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clex-rename-toks"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/clex-rename-toks-0",
@@ -307,7 +307,7 @@ test_reducers! {
         ]
     }
     clex_rm_toks_1 => {
-        "reducers/clex-rm-toks-1.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clex-rm-toks-1"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/clex-rm-toks-1-0",
