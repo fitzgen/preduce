@@ -1,4 +1,4 @@
-template<>
+template
 class Nine {
     class Foo {
         bool b;

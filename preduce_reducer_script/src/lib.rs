@@ -141,11 +141,9 @@ use preduce_ipc_types::{FastForwardResponse, NewResponse, NextOnInterestingRespo
                         ReduceResponse, Response};
 use serde::{Deserialize, Serialize};
 use std::cmp;
-use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::io::{self, BufRead, Read, Seek, Write};
-use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -542,22 +540,21 @@ where
             return Ok(false);
         }
 
-        let ranges =
-            BTreeSet::from_iter(self.get_ranges_in_chunk().iter().cloned().map(OrdByStart));
+        let mut ranges: Vec<_> = self.get_ranges_in_chunk().iter().cloned().collect();
+        ranges.sort_unstable_by(|a, b| {
+            OrdByStart(a.clone()).cmp(&OrdByStart(b.clone()))
+        });
 
-        let seed = fs::File::open(seed)?;
-        let mut seed = io::BufReader::new(seed);
-
-        let dest = fs::File::create(dest)?;
-        let mut dest = io::BufWriter::new(dest);
+        let mut seed = fs::File::open(seed)?;
+        let mut dest = fs::File::create(dest)?;
 
         const BUF_SIZE: usize = 1024 * 1024;
         let mut buf: Vec<u8> = vec![0; BUF_SIZE];
 
         let mut offset = 0;
         for r in ranges {
-            if offset < r.0.start {
-                let mut to_write = r.0.start - offset;
+            if offset < r.start {
+                let mut to_write = r.start - offset;
 
                 while to_write > BUF_SIZE as u64 {
                     seed.read_exact(&mut buf)?;
@@ -569,8 +566,10 @@ where
                 dest.write_all(&buf[0..to_write as usize])?;
             }
 
-            seed.seek(io::SeekFrom::Start(r.0.end))?;
-            offset = r.0.end;
+            if offset < r.end {
+                seed.seek(io::SeekFrom::Start(r.end))?;
+                offset = r.end;
+            }
         }
 
         io::copy(&mut seed, &mut dest)?;
@@ -705,7 +704,9 @@ pub trait RemoveRegex {
     fn remove_regex() -> &'static regex::bytes::Regex;
 }
 
-impl<R: RemoveRegex> RemoveRanges for R {
+struct RemoveRegexReducer<R: RemoveRegex>(PhantomData<R>);
+
+impl<R: RemoveRegex> RemoveRanges for RemoveRegexReducer<R> {
     fn remove_ranges(seed: PathBuf) -> io::Result<Vec<Range<u64>>> {
         let mut buf = vec![];
 
@@ -735,7 +736,7 @@ impl<R: RemoveRegex> RemoveRanges for R {
 ///
 /// See `RemoveRegex` for details.
 pub fn run_regex<R: RemoveRegex>() -> ! {
-    run::<RemoveRangesReducer<R>>()
+    run::<RemoveRangesReducer<RemoveRegexReducer<R>>>()
 }
 
 /// Count the number of lines in the file at the given path.
@@ -870,6 +871,88 @@ macro_rules! clang_delta_reducer {
             $crate::run_clang_delta::<Reducer>()
         }
     }
+}
+
+/// A trait for defining reducer scripts that remove the contents within
+/// balanced parens/brackets/braces/etc.
+///
+/// To run a reducer script implemented by a `RemoveBalanced` implementation,
+/// call `run_balanced::<MyRemoveBalanced>()`.
+///
+/// ### Example
+///
+/// A reducer script that removes the contents of balanced parentheses.
+///
+/// ```
+/// extern crate preduce_reducer_script;
+/// use preduce_reducer_script::{RemoveBalanced, run_balanced};
+///
+/// struct Parens;
+///
+/// impl RemoveBalanced for Parens {
+///     fn remove_balanced() -> (u8, u8) {
+///         (b'(', b')')
+///     }
+/// }
+///
+/// fn main() {
+/// #   #![allow(unreachable_code)]
+/// #   return;
+///     run_balanced::<Parens>()
+/// }
+/// ```
+pub trait RemoveBalanced {
+    /// Return the open and closing bytes.
+    fn remove_balanced() -> (u8, u8);
+}
+
+struct RemoveBalancedReducer<R: RemoveBalanced>(PhantomData<R>);
+
+impl<R: RemoveBalanced> RemoveRanges for RemoveBalancedReducer<R> {
+    fn remove_ranges(seed: PathBuf) -> io::Result<Vec<Range<u64>>> {
+        let (open, close) = R::remove_balanced();
+        let mut ranges = vec![];
+        let mut stack = vec![];
+        let mut offset = 0u64;
+
+        const BUF_SIZE: usize = 1024 * 1024;
+        let mut buf = vec![0; BUF_SIZE];
+
+        let mut file = fs::File::open(seed)?;
+        let mut bytes_read;
+        while {
+            bytes_read = file.read(&mut buf)?;
+            bytes_read > 0
+        } {
+            for b in &buf[0..bytes_read] {
+                if *b == open {
+                    stack.push(offset);
+                } else if *b == close {
+                    if let Some(start) = stack.pop() {
+                        debug_assert!(start < offset);
+                        ranges.push(start..offset + 1);
+
+                        let inner_start = start + 1;
+                        let inner_end = offset;
+                        if inner_start < inner_end {
+                            ranges.push(inner_start..inner_end);
+                        }
+                    }
+                }
+                offset += 1;
+            }
+        }
+
+        Ok(ranges)
+    }
+}
+
+/// Run a reducer script that removes text within balanced brackets/parens/etc
+/// from the seed test case.
+///
+/// See `RemoveBalanced` for details.
+pub fn run_balanced<R: RemoveBalanced>() -> ! {
+    run::<RemoveRangesReducer<RemoveBalancedReducer<R>>>()
 }
 
 #[cfg(test)]

@@ -11,6 +11,26 @@ path = "src/bin/preduce.rs"
 
 [[bin]]
 doc = false
+name = "preduce-reducer-balanced-angle"
+path = "reducers/balanced-angle.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-balanced-curly"
+path = "reducers/balanced-curly.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-balanced-paren"
+path = "reducers/balanced-paren.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-balanced-square"
+path = "reducers/balanced-square.rs"
+
+[[bin]]
+doc = false
 name = "preduce-reducer-blank"
 path = "reducers/blank.rs"
 

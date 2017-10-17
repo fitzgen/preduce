@@ -1,9 +1,1 @@
-#include<stdio.h>
-#	include <cstdlib>
-
-int main
-{
-  #include <something>
-  return 0;
-  #include not even the right syntax, but it'll still get removed
-}
+aa bb ee

@@ -1,10 +1,8 @@
 template<typename T, typename U, int N>
 class Nine {
-    class Foo {};
+    class Foo ;
 
-    class Bar {
-        char c;
-    };
+    class Bar ;
 
     T t;
     U u;

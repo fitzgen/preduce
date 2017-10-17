@@ -149,7 +149,7 @@ where
             println!("-------------------------------------------------------");
 
             let output = Command::new("diff")
-                .args(&["-U8", &expected, &actual])
+                .args(&["-U100", &expected, &actual])
                 .output()
                 .expect("should run diff OK");
 
@@ -192,7 +192,7 @@ macro_rules! test_reducers {
 
 test_reducers! {
     balanced_angle => {
-        "reducers/balanced-angle.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-angle"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/balanced-angle-0",
@@ -200,7 +200,7 @@ test_reducers! {
         ]
     }
     balanced_curly => {
-        "reducers/balanced-curly.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-curly"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/balanced-curly-0",
@@ -212,15 +212,23 @@ test_reducers! {
         ]
     }
     balanced_paren => {
-        "reducers/balanced-paren.py",
-        seeded with "tests/fixtures/some-includes.cpp",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-paren"),
+        seeded with "tests/fixtures/parens.txt",
         generates [
             "tests/expectations/balanced-paren-0",
             "tests/expectations/balanced-paren-1",
+            "tests/expectations/balanced-paren-2",
+            "tests/expectations/balanced-paren-3",
+            "tests/expectations/balanced-paren-4",
+            "tests/expectations/balanced-paren-5",
+            "tests/expectations/balanced-paren-6",
+            "tests/expectations/balanced-paren-7",
+            "tests/expectations/balanced-paren-8",
+            "tests/expectations/balanced-paren-9",
         ]
     }
     balanced_square => {
-        "reducers/balanced-square.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-square"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/balanced-square-0",
