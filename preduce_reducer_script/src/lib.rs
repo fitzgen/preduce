@@ -422,7 +422,6 @@ where
     }
 
     fn next(mut self, _seed: PathBuf) -> io::Result<Option<Self>> {
-        assert!(self.chunk_size > 0);
         assert!(self.chunk_size <= self.ranges.len());
 
         self.index += 1;
@@ -445,6 +444,8 @@ where
         _old_seed: PathBuf,
         _new_seed: PathBuf,
     ) -> io::Result<Option<Self>> {
+        assert!(self.chunk_size <= self.ranges.len());
+
         let start_removed = self.index;
         let end_removed = self.index + self.chunk_size;
         let (mut removed, mut ranges) = self.ranges
@@ -536,8 +537,10 @@ where
     }
 
     fn reduce(self, seed: PathBuf, dest: PathBuf) -> io::Result<bool> {
-        assert!(self.chunk_size > 0);
         assert!(self.chunk_size <= self.ranges.len());
+        if self.chunk_size == 0 {
+            return Ok(false);
+        }
 
         let ranges =
             BTreeSet::from_iter(self.get_ranges_in_chunk().iter().cloned().map(OrdByStart));

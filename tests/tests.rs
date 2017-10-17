@@ -273,7 +273,7 @@ test_reducers! {
         ]
     }
     includes => {
-        "reducers/includes.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-includes"),
         seeded with "tests/fixtures/some-includes.cpp",
         generates [
             "tests/expectations/includes-0",
