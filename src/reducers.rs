@@ -655,59 +655,8 @@ where
 mod tests {
     use super::*;
     use std::borrow::Cow;
-    use std::env;
     use test_case;
-    use test_utils::*;
     use traits::Reducer;
-
-    fn with_counting_iterations<F, T>(n: u8, mut f: F) -> T
-    where
-        F: FnMut() -> T
-    {
-        use std::sync::Mutex;
-
-        lazy_static! {
-            static ref ENV_COUNT_MUTEX: Mutex<()> = Mutex::new(());
-        }
-
-        let _lock = ENV_COUNT_MUTEX.lock().unwrap();
-
-        let old = env::var("PREDUCE_COUNTING_ITERATIONS").unwrap_or("".into());
-        env::set_var("PREDUCE_COUNTING_ITERATIONS", n.to_string());
-
-        let ret = f();
-
-        env::set_var("PREDUCE_COUNTING_ITERATIONS", old);
-
-        ret
-    }
-
-    #[test]
-    fn script() {
-        with_counting_iterations(10, || {
-            let mut reducer = Script::new(get_reducer("counting.sh")).unwrap();
-            let seed = test_case::Interesting::testing_only_new();
-            let mut state = reducer.new_state(&seed).unwrap();
-
-            let reduction = reducer.reduce(&seed, &state)
-                .unwrap()
-                .unwrap();
-            assert!(reduction.path().is_file());
-
-            for _ in 1..10 {
-                state = reducer.next_state(&seed, &state).unwrap().unwrap();
-                let reduction = reducer.reduce(&seed, &state)
-                    .unwrap()
-                    .unwrap();
-                assert!(reduction.path().is_file());
-            }
-
-            state = reducer.next_state(&seed, &state).unwrap().unwrap();
-            assert!(reducer.reduce(&seed, &state)
-                    .unwrap()
-                    .is_none());
-        });
-    }
 
     #[test]
     fn fuse() {

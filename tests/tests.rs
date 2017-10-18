@@ -27,8 +27,7 @@ where
         .expect("should run cp OK");
     assert!(status.success(), "cp should exit OK");
 
-    let status = Command::new("cargo")
-        .arg("run")
+    let status = Command::new(concat!(env!("PREDUCE_TARGET_DIR"), "/preduce"))
         .arg(copy_of_test_case.display().to_string())
         .arg(predicate.as_ref().display().to_string())
         .args(
@@ -92,9 +91,9 @@ test_preduce_runs! {
         "tests/fixtures/nested-classes.cpp",
         judged by "tests/predicates/class-nine-compiles.sh",
         reductions by [
-            "reducers/balanced-curly.py",
+            concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-curly"),
             concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-chunks"),
-            "reducers/clang-delta-reduce-class-template-param.py",
+            concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clang-delta-reduce-class-template-param"),
         ]
     }
 }

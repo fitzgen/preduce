@@ -22,10 +22,6 @@ extern crate preduce_ipc_types;
 extern crate serde_json;
 extern crate tempdir;
 
-#[macro_use]
-#[cfg(test)]
-extern crate lazy_static;
-
 mod actors;
 pub mod error;
 pub mod interesting;

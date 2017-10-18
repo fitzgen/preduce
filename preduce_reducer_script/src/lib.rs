@@ -422,6 +422,9 @@ where
 
     fn next(mut self, _seed: PathBuf) -> io::Result<Option<Self>> {
         assert!(self.chunk_size <= self.ranges.len());
+        if self.chunk_size == 0 {
+            return Ok(None);
+        }
 
         self.index += 1;
 
@@ -444,6 +447,10 @@ where
         _new_seed: PathBuf,
     ) -> io::Result<Option<Self>> {
         assert!(self.chunk_size <= self.ranges.len());
+
+        if self.chunk_size == 0 {
+            return Ok(None);
+        }
 
         let start_removed = self.index;
         let end_removed = self.index + self.chunk_size;
@@ -542,9 +549,7 @@ where
         }
 
         let mut ranges: Vec<_> = self.get_ranges_in_chunk().iter().cloned().collect();
-        ranges.sort_unstable_by(|a, b| {
-            OrdByStart(a.clone()).cmp(&OrdByStart(b.clone()))
-        });
+        ranges.sort_unstable_by(|a, b| OrdByStart(a.clone()).cmp(&OrdByStart(b.clone())));
 
         let mut seed = fs::File::open(seed)?;
         let mut dest = fs::File::create(dest)?;
@@ -1024,7 +1029,7 @@ impl<C: ClangDelta> Reducer for ClangDeltaReducer<C> {
                     .args(&[
                         format!("--transformation={}", C::transformation()),
                         format!("--counter={}", self.index),
-                        seed.display().to_string()
+                        seed.display().to_string(),
                     ])
                     .stdout(dest)
                     .stderr(process::Stdio::null())
@@ -1198,11 +1203,7 @@ impl<C: Clex> Reducer for ClexReducer<C> {
                 let index = self.index.to_string();
                 let seed = seed.display().to_string();
                 let status = process::Command::new(clex)
-                    .args(&[
-                        C::clex_command(),
-                        &index,
-                        &seed,
-                    ])
+                    .args(&[C::clex_command(), &index, &seed])
                     .stdout(dest)
                     .stderr(process::Stdio::null())
                     .status()?;
