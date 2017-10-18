@@ -17,7 +17,7 @@ where
     let _stdout = stdout.lock();
 
     let test_case = test_case.as_ref();
-    let copy_of_test_case = test_case.with_extension(".preduce-run");
+    let copy_of_test_case = test_case.with_extension("preduce-run");
     let status = Command::new("cp")
         .args(&[
             test_case.display().to_string(),
@@ -27,8 +27,7 @@ where
         .expect("should run cp OK");
     assert!(status.success(), "cp should exit OK");
 
-    let status = Command::new("cargo")
-        .arg("run")
+    let status = Command::new(concat!(env!("PREDUCE_TARGET_DIR"), "/preduce"))
         .arg(copy_of_test_case.display().to_string())
         .arg(predicate.as_ref().display().to_string())
         .args(
@@ -85,17 +84,16 @@ test_preduce_runs! {
         "tests/fixtures/lorem-ipsum.txt",
         judged by "tests/predicates/has-lorem.sh",
         reductions by [
-            "reducers/chunks.py",
-            "reducers/lines.py",
+            concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-chunks"),
         ]
     }
     class_nine => {
         "tests/fixtures/nested-classes.cpp",
         judged by "tests/predicates/class-nine-compiles.sh",
         reductions by [
-            "reducers/balanced-curly.py",
-            "reducers/lines.py",
-            "reducers/clang-delta-reduce-class-template-param.py",
+            concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-curly"),
+            concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-chunks"),
+            concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clang-delta-reduce-class-template-param"),
         ]
     }
 }
@@ -109,27 +107,60 @@ where
 {
     let judge = preduce::interesting::NonEmpty;
 
+    let seed_string = seed.as_ref().display().to_string();
     let seed = preduce::test_case::Interesting::initial(seed, &judge)
         .expect("should run interesting test OK")
         .expect("should be interesting");
 
     let mut reducer = preduce::reducers::Script::new(reducer).expect("should create reducer OK");
-    reducer.set_seed(seed);
+    let state = reducer.new_state(&seed).expect("reducer should create new state");
+    let mut state = Some(state);
 
     for expected in expecteds {
-        let reduction = reducer
-            .next_potential_reduction()
-            .expect("should generate next reduction OK")
-            .expect("should not be exhausted");
+        let next_state = {
+            let state_ref = state.as_ref().expect("Expecting another reduction, should have state");
 
-        let expected = expected.as_ref().display().to_string();
-        let actual = reduction.path().display().to_string();
+            let reduction = reducer.reduce(&seed, state_ref)
+                .expect("should generate next reduction OK")
+                .expect("should not be exhausted");
 
-        let status = Command::new("diff")
-            .args(&["-U8", &expected, &actual])
-            .status()
-            .expect("should run diff OK");
-        assert!(status.success(), "diff should exit OK");
+            let expected = expected.as_ref().display().to_string();
+            let actual = reduction.path().display().to_string();
+
+            let output = Command::new("diff")
+                .args(&["-U100", &seed_string, &actual])
+                .output()
+                .expect("should run diff OK");
+
+            println!();
+            println!();
+            println!();
+            println!("=======================================================");
+            println!("Actual reduction generated is:");
+            println!("-------------------------------------------------------");
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            println!("=======================================================");
+            println!();
+            println!();
+            println!();
+            println!("=======================================================");
+            println!("Diff with expected reduction generated is:");
+            println!("-------------------------------------------------------");
+
+            let output = Command::new("diff")
+                .args(&["-U100", &expected, &actual])
+                .output()
+                .expect("should run diff OK");
+
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            println!("=======================================================");
+
+            assert!(output.status.success(), "diff should exit OK");
+
+            reducer.next_state(&seed, state_ref)
+                .expect("should call next_state OK")
+        };
+        state = next_state;
     }
 }
 
@@ -160,7 +191,7 @@ macro_rules! test_reducers {
 
 test_reducers! {
     balanced_angle => {
-        "reducers/balanced-angle.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-angle"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/balanced-angle-0",
@@ -168,7 +199,7 @@ test_reducers! {
         ]
     }
     balanced_curly => {
-        "reducers/balanced-curly.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-curly"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/balanced-curly-0",
@@ -180,15 +211,23 @@ test_reducers! {
         ]
     }
     balanced_paren => {
-        "reducers/balanced-paren.py",
-        seeded with "tests/fixtures/some-includes.cpp",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-paren"),
+        seeded with "tests/fixtures/parens.txt",
         generates [
             "tests/expectations/balanced-paren-0",
             "tests/expectations/balanced-paren-1",
+            "tests/expectations/balanced-paren-2",
+            "tests/expectations/balanced-paren-3",
+            "tests/expectations/balanced-paren-4",
+            "tests/expectations/balanced-paren-5",
+            "tests/expectations/balanced-paren-6",
+            "tests/expectations/balanced-paren-7",
+            "tests/expectations/balanced-paren-8",
+            "tests/expectations/balanced-paren-9",
         ]
     }
     balanced_square => {
-        "reducers/balanced-square.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-square"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/balanced-square-0",
@@ -196,7 +235,7 @@ test_reducers! {
         ]
     }
     blank => {
-        "reducers/blank.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-blank"),
         seeded with "tests/fixtures/wow.cpp",
         generates [
             "tests/expectations/blank-0",
@@ -205,8 +244,8 @@ test_reducers! {
         ]
     }
     chunks => {
-        "reducers/chunks.py",
-        seeded with "tests/fixtures/lorem-ipsum.txt",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-chunks"),
+        seeded with "tests/fixtures/lines.txt",
         generates [
             "tests/expectations/chunks-0",
             "tests/expectations/chunks-1",
@@ -215,41 +254,33 @@ test_reducers! {
             "tests/expectations/chunks-4",
             "tests/expectations/chunks-5",
             "tests/expectations/chunks-6",
-        ]
-    }
-    lines => {
-        "reducers/lines.py",
-        seeded with "tests/fixtures/lorem-ipsum.txt",
-        generates [
-            "tests/expectations/lines-0",
-            "tests/expectations/lines-1",
-            "tests/expectations/lines-2",
-            "tests/expectations/lines-3",
+            "tests/expectations/chunks-7",
+            "tests/expectations/chunks-8",
         ]
     }
     clang_format => {
-        "reducers/clang-format.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clang-format"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/clang-format-0",
         ]
     }
     clang_delta_reduce_class_template_param => {
-        "reducers/clang-delta-reduce-class-template-param.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clang-delta-reduce-class-template-param"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/clang-delta-reduce-class-template-param-0",
         ]
     }
     clang_delta_remove_unused_outer_class => {
-        "reducers/clang-delta-remove-unused-outer-class.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clang-delta-remove-unused-outer-class"),
         seeded with "tests/fixtures/wow.cpp",
         generates [
             "tests/expectations/clang-delta-remove-unused-outer-class-0",
         ]
     }
     includes => {
-        "reducers/includes.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-includes"),
         seeded with "tests/fixtures/some-includes.cpp",
         generates [
             "tests/expectations/includes-0",
@@ -264,7 +295,7 @@ test_reducers! {
 #[cfg(not(travis_ci))]
 test_reducers! {
     clex_rename_toks => {
-        "reducers/clex-rename-toks.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clex-rename-toks"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/clex-rename-toks-0",
@@ -275,7 +306,7 @@ test_reducers! {
         ]
     }
     clex_rm_toks_1 => {
-        "reducers/clex-rm-toks-1.py",
+        concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clex-rm-toks-1"),
         seeded with "tests/fixtures/nested-classes.cpp",
         generates [
             "tests/expectations/clex-rm-toks-1-0",

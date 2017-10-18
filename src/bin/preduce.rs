@@ -66,26 +66,6 @@ fn parse_args() -> clap::ArgMatches<'static> {
                 .long("print-histograms")
                 .help("Print histograms when finished."),
         )
-        .arg(
-            clap::Arg::with_name("lazily_reseed")
-                .short("l")
-                .long("lazily-reseed")
-                .help(
-                    "Instead of eagerly reseeding reducers with the new smallest \
-                     insteresting test case, let them continue generating reductions of \
-                     the older version. This will make reduction take longer, but may \
-                     result in a smaller final reduction size.",
-                ),
-        )
-        .arg(
-            clap::Arg::with_name("shuffle")
-                .short("s")
-                .long("shuffle")
-                .help(
-                    "Shuffle reductions to be tested for interestingness as they are \
-                     generated.",
-                ),
-        )
         .get_matches()
 }
 
@@ -99,18 +79,8 @@ fn try_main() -> error::Result<()> {
         .unwrap()
         .map(|script| {
             let reducer = reducers::Script::new(script)?;
-            let reducer = reducers::DontRepeatYourself::new(reducer);
             let reducer = reducers::Fuse::new(reducer);
-            let mut reducer = Box::new(reducer) as Box<traits::Reducer>;
-
-            if args.is_present("lazily_reseed") {
-                reducer = Box::new(reducers::LazilyReseed::new(reducer));
-            }
-
-            if args.is_present("shuffle") {
-                reducer = Box::new(reducers::Shuffle::new(10, reducer));
-            }
-
+            let reducer = Box::new(reducer) as Box<traits::Reducer>;
             Ok(reducer)
         })
         .collect::<error::Result<Vec<_>>>()?;

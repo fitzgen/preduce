@@ -4,6 +4,7 @@
 use either::{Either, Left, Right};
 use error;
 use std::fs;
+use std::hash;
 use std::io;
 use std::path;
 use std::sync::Arc;
@@ -11,7 +12,7 @@ use tempdir;
 use traits;
 
 /// Methods common to all test cases.
-pub trait TestCaseMethods: Into<TempFile> {
+pub trait TestCaseMethods: Into<TempFile> + hash::Hash {
     /// Get the path to this test case.
     fn path(&self) -> &path::Path;
 
@@ -59,6 +60,12 @@ impl Eq for TempFileInner {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TempFile {
     inner: Arc<TempFileInner>,
+}
+
+impl hash::Hash for TempFile {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.path().hash(state);
+    }
 }
 
 impl TempFile {
@@ -142,6 +149,12 @@ pub struct PotentialReduction {
     delta: u64,
 }
 
+impl hash::Hash for PotentialReduction {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.path().hash(state);
+    }
+}
+
 impl TestCaseMethods for PotentialReduction {
     fn path(&self) -> &path::Path {
         &self.test_case.path()
@@ -223,6 +236,12 @@ pub struct Interesting {
     kind: InterestingKind,
 }
 
+impl hash::Hash for Interesting {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.path().hash(state);
+    }
+}
+
 impl TestCaseMethods for Interesting {
     fn path(&self) -> &path::Path {
         self.kind.path()
@@ -274,6 +293,15 @@ impl Interesting {
             }),
         }))
     }
+
+    /// If this interesting test case was created from a reduction, rather than
+    /// the initial interesting test case, coerce it to a `PotentialReduction`.
+    pub fn as_potential_reduction(&self) -> Option<&PotentialReduction> {
+        match self.kind {
+            InterestingKind::Initial(..) => None,
+            InterestingKind::Reduction(ref r) => Some(r),
+        }
+    }
 }
 
 /// An enumeration of the kinds of interesting test cases.
@@ -285,6 +313,12 @@ enum InterestingKind {
     /// A potential reduction of the initial test case that has been found to be
     /// interesting.
     Reduction(PotentialReduction),
+}
+
+impl hash::Hash for InterestingKind {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.path().hash(state);
+    }
 }
 
 impl TestCaseMethods for InterestingKind {
@@ -326,6 +360,12 @@ struct InitialInteresting {
 
     /// The size of the file.
     size: u64,
+}
+
+impl hash::Hash for InitialInteresting {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.path().hash(state);
+    }
 }
 
 impl TestCaseMethods for InitialInteresting {
@@ -420,7 +460,7 @@ mod tests {
 
         assert_eq!(
             interesting.size(),
-            contents.len() as _,
+            contents.len() as u64,
             "And the test case should have the expected size"
         );
     }
@@ -505,7 +545,7 @@ mod tests {
 
         assert_eq!(
             interesting_reduction.size(),
-            contents.len() as _,
+            contents.len() as u64,
             "And the test case should have the expected size"
         );
     }

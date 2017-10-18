@@ -10,5 +10,5 @@ class Nine {
 
     T t;
     U u;
-    char s[];
+    char s;
 };

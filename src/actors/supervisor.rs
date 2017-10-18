@@ -29,6 +29,7 @@ enum SupervisorMessage {
 
     // From reducers.
     ReducerPanicked(ReducerId, Box<Any + Send + 'static>),
+    ReducerErrored(ReducerId, error::Error),
     ReplyNextReduction(Reducer, test_case::PotentialReduction),
     ReplyExhausted(Reducer, test_case::Interesting),
 
@@ -115,6 +116,13 @@ impl Supervisor {
             .unwrap();
     }
 
+    /// Notify the supervisor that the reducer with the given id errored out.
+    pub fn reducer_errored(&self, id: ReducerId, err: error::Error) {
+        self.sender
+            .send(SupervisorMessage::ReducerErrored(id, err))
+            .unwrap();
+    }
+
     /// Tell the supervisor that there are no more reductions of the current
     /// test case.
     pub fn no_more_reductions(&self, reducer: Reducer, seed: test_case::Interesting) {
@@ -125,7 +133,11 @@ impl Supervisor {
 
     /// Give the supervisor the requested next reduction of the current test
     /// case.
-    pub fn reply_next_reduction(&self, reducer: Reducer, reduction: test_case::PotentialReduction) {
+    pub fn reply_next_reduction(
+        &self,
+        reducer: Reducer,
+        reduction: test_case::PotentialReduction
+    ) {
         self.sender
             .send(SupervisorMessage::ReplyNextReduction(reducer, reduction))
             .unwrap();
@@ -287,6 +299,17 @@ where
                     self.reducers_without_actors.push(reducer);
                 }
 
+                SupervisorMessage::ReducerErrored(id, err) => {
+                    assert!(self.reducer_actors.contains_key(&id));
+                    assert!(self.reducer_id_to_trait_object.contains_key(&id));
+
+                    self.logger.reducer_errored(id, err);
+                    self.reducer_actors.remove(&id);
+
+                    let reducer = self.reducer_id_to_trait_object.remove(&id).unwrap();
+                    self.reducers_without_actors.push(reducer);
+                }
+
                 SupervisorMessage::ReplyExhausted(reducer, seed) => {
                     assert!(self.reducer_actors.contains_key(&reducer.id()));
                     assert!(self.reducer_id_to_trait_object.contains_key(&reducer.id()));
@@ -345,7 +368,7 @@ where
                         self.oracle.observe_exhausted(&name);
                         self.exhausted_reducers.insert(reducer.id());
                     } else {
-                        reducer.request_next_reduction();
+                        reducer.request_next_reduction(None);
                     }
                 }
 
@@ -358,7 +381,8 @@ where
                             .insert(reduction, reducer.id(), priority);
                         self.drain_queues();
                     } else {
-                        reducer.request_next_reduction();
+                        reducer.not_interesting(reduction);
+                        reducer.request_next_reduction(None);
                     }
                 }
 
@@ -479,7 +503,7 @@ where
             // And pipeline the worker's is-interesting test with generating the
             // next reduction.
             if !self.exhausted_reducers.contains(&reducer_id) {
-                self.reducer_actors[&reducer_id].request_next_reduction();
+                self.reducer_actors[&reducer_id].request_next_reduction(None);
             }
         }
     }
@@ -499,13 +523,7 @@ where
         let new_size = interesting.size();
         let old_size = smallest_interesting.size();
 
-        // Allow not strictly smaller new "smallest" interesting test cases to
-        // allow reducers like clang-format to enable further reductions down
-        // the line, even if it technically adds indentation.
-        if new_size < old_size
-        // TODO FITZGEN: add some kind of parent id again?
-        // || interesting.parent() == Some(smallest_interesting.commit_id())
-        {
+        if new_size < old_size {
             // We have a new globally smallest insteresting test case! First,
             // update the original test case file with the new interesting
             // reduction. The reduction process can take a LONG time, and if the
@@ -537,7 +555,7 @@ where
                         return true;
                     }
 
-                    reducers[&reducer_id].request_next_reduction();
+                    reducers[&reducer_id].request_next_reduction(None);
                     false
                 });
             }
@@ -625,7 +643,7 @@ where
             self.reducer_id_counter += 1;
 
             self.reducer_id_to_trait_object
-                .insert(id, reducer.clone_unseeded());
+                .insert(id, reducer.clone_boxed());
             let reducer_actor = Reducer::spawn(id, reducer, self.me.clone(), self.logger.clone())?;
             self.reducer_actors.insert(id, reducer_actor);
             self.exhausted_reducers.insert(id);
@@ -652,7 +670,7 @@ where
             // generated (or currently being generated) reduction from the
             // reduction queue.
             if self.exhausted_reducers.contains(id) {
-                reducer_actor.request_next_reduction();
+                reducer_actor.request_next_reduction(None);
                 self.exhausted_reducers.remove(id);
             }
         }

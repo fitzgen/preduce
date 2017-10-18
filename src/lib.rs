@@ -18,6 +18,8 @@ extern crate fixedbitset;
 extern crate histo;
 extern crate is_executable;
 extern crate num_cpus;
+extern crate preduce_ipc_types;
+extern crate serde_json;
 extern crate tempdir;
 
 mod actors;

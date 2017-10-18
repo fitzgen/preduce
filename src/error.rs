@@ -1,5 +1,6 @@
 //! Custom errors and results.
 
+use serde_json;
 use std::any::Any;
 use std::error;
 use std::fmt;
@@ -11,6 +12,9 @@ use std::path;
 pub enum Error {
     /// An IO error.
     Io(io::Error),
+
+    /// A JSON encoding/decoding error.
+    Json(serde_json::Error),
 
     /// A panicked thread's failure value.
     Thread(Box<Any + Send + 'static>),
@@ -35,6 +39,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error> {
         match *self {
             Error::Io(ref e) => fmt::Display::fmt(e, f),
+            Error::Json(ref e) => fmt::Display::fmt(e, f),
             Error::Thread(ref e) => write!(f, "Thread panicked: {:?}", e),
             Error::MisbehavingReducerScript(ref details) => {
                 write!(f, "Misbehaving reducer script: {}", details)
@@ -60,6 +65,7 @@ impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
             Error::Io(ref e) => error::Error::description(e),
+            Error::Json(ref e) => error::Error::description(e),
             Error::Thread(_) => "A panicked thread",
             Error::MisbehavingReducerScript(_) => "Misbehaving reducer script",
             Error::TestCaseBackupFailure(_) => "Could not backup initial test case",
@@ -72,11 +78,25 @@ impl error::Error for Error {
             Error::DoesNotExist(_) => "There is no file at the given path, but we expected one",
         }
     }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            Error::Io(ref e) => Some(e),
+            Error::Json(ref e) => Some(e),
+            _ => None,
+        }
+    }
 }
 
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Error::Io(e)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(e: serde_json::Error) -> Self {
+        Error::Json(e)
     }
 }
 
