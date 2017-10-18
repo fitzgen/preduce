@@ -474,6 +474,46 @@ doc = false
 name = "preduce-reducer-includes"
 path = "reducers/includes.rs"
 
+[[bin]]
+doc = false
+name = "preduce-reducer-topformflat-0"
+path = "reducers/topformflat-0.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-topformflat-1"
+path = "reducers/topformflat-1.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-topformflat-10"
+path = "reducers/topformflat-10.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-topformflat-2"
+path = "reducers/topformflat-2.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-topformflat-3"
+path = "reducers/topformflat-3.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-topformflat-4"
+path = "reducers/topformflat-4.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-topformflat-6"
+path = "reducers/topformflat-6.rs"
+
+[[bin]]
+doc = false
+name = "preduce-reducer-topformflat-8"
+path = "reducers/topformflat-8.rs"
+
 [dependencies]
 clap = "2.23.1"
 ctrlc = "3.0.2"
