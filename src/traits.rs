@@ -212,7 +212,7 @@ pub trait Reducer: fmt::Debug + Send {
     fn next_state(
         &mut self,
         seed: &test_case::Interesting,
-        prev_state: &Box<Any + Send>
+        prev_state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>>;
 
     /// Advance to the next state, given that the previous state produced an
@@ -231,7 +231,7 @@ pub trait Reducer: fmt::Debug + Send {
         &mut self,
         new_seed: &test_case::Interesting,
         old_seed: &test_case::Interesting,
-        prev_state: &Box<Any + Send>
+        prev_state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>>;
 
     /// Skip over the next `n` states, returning an eagerly advanced state.
@@ -251,7 +251,7 @@ pub trait Reducer: fmt::Debug + Send {
         &mut self,
         seed: &test_case::Interesting,
         n: usize,
-        prev_state: &Box<Any + Send>
+        prev_state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>> {
         let mut state = match self.next_state(seed, prev_state)? {
             None => return Ok(None),
@@ -276,7 +276,7 @@ pub trait Reducer: fmt::Debug + Send {
     fn reduce(
         &mut self,
         seed: &test_case::Interesting,
-        state: &Box<Any + Send>
+        state: &Box<Any + Send>,
     ) -> error::Result<Option<test_case::PotentialReduction>>;
 }
 

@@ -3,7 +3,7 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-use preduce_reducer_script::{RemoveRanges, run_ranges};
+use preduce_reducer_script::{run_ranges, RemoveRanges};
 use std::fs;
 use std::io::{self, BufRead};
 use std::ops;

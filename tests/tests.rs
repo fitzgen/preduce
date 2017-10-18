@@ -113,14 +113,19 @@ where
         .expect("should be interesting");
 
     let mut reducer = preduce::reducers::Script::new(reducer).expect("should create reducer OK");
-    let state = reducer.new_state(&seed).expect("reducer should create new state");
+    let state = reducer
+        .new_state(&seed)
+        .expect("reducer should create new state");
     let mut state = Some(state);
 
     for expected in expecteds {
         let next_state = {
-            let state_ref = state.as_ref().expect("Expecting another reduction, should have state");
+            let state_ref = state
+                .as_ref()
+                .expect("Expecting another reduction, should have state");
 
-            let reduction = reducer.reduce(&seed, state_ref)
+            let reduction = reducer
+                .reduce(&seed, state_ref)
                 .expect("should generate next reduction OK")
                 .expect("should not be exhausted");
 
@@ -157,7 +162,8 @@ where
 
             assert!(output.status.success(), "diff should exit OK");
 
-            reducer.next_state(&seed, state_ref)
+            reducer
+                .next_state(&seed, state_ref)
                 .expect("should call next_state OK")
         };
         state = next_state;

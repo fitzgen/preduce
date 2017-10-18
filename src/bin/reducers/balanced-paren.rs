@@ -1,5 +1,5 @@
 extern crate preduce_reducer_script;
-use preduce_reducer_script::{RemoveBalanced, run_balanced};
+use preduce_reducer_script::{run_balanced, RemoveBalanced};
 
 struct Parens;
 

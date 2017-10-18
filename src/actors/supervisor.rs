@@ -133,11 +133,7 @@ impl Supervisor {
 
     /// Give the supervisor the requested next reduction of the current test
     /// case.
-    pub fn reply_next_reduction(
-        &self,
-        reducer: Reducer,
-        reduction: test_case::PotentialReduction
-    ) {
+    pub fn reply_next_reduction(&self, reducer: Reducer, reduction: test_case::PotentialReduction) {
         self.sender
             .send(SupervisorMessage::ReplyNextReduction(reducer, reduction))
             .unwrap();
@@ -398,8 +394,8 @@ where
             // If all of our reducers are exhausted, and we are out of potential
             // reductions to test, then shutdown any idle workers, since we
             // don't have any work for them.
-            if self.exhausted_reducers.len() == self.reducer_actors.len() &&
-                self.reduction_queue.is_empty()
+            if self.exhausted_reducers.len() == self.reducer_actors.len()
+                && self.reduction_queue.is_empty()
             {
                 for worker in self.idle_workers.drain(..) {
                     self.workers.remove(&worker.id());

@@ -3,7 +3,7 @@ extern crate lazy_static;
 extern crate preduce_reducer_script;
 extern crate regex;
 
-use preduce_reducer_script::{RemoveRegex, run_regex};
+use preduce_reducer_script::{run_regex, RemoveRegex};
 use regex::bytes::Regex;
 
 struct Includes;

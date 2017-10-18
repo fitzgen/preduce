@@ -37,9 +37,7 @@ fn parse_args() -> clap::ArgMatches<'static> {
                 .required(true)
                 .multiple(true)
                 .min_values(1)
-                .help(
-                    "The reduction generator scripts. There must be at least one.",
-                ),
+                .help("The reduction generator scripts. There must be at least one."),
         )
         .arg(
             clap::Arg::with_name("workers")

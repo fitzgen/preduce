@@ -15,8 +15,8 @@ struct Observed {
 
 impl Observed {
     fn total(&self) -> u32 {
-        self.smallest_interesting_count + self.not_smallest_interesting_count +
-            self.not_interesting_count
+        self.smallest_interesting_count + self.not_smallest_interesting_count
+            + self.not_interesting_count
     }
 
     fn interesting(&self) -> u32 {
