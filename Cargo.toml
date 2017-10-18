@@ -12,507 +12,507 @@ path = "src/bin/preduce.rs"
 [[bin]]
 doc = false
 name = "preduce-reducer-balanced-angle"
-path = "reducers/balanced-angle.rs"
+path = "src/bin/reducers/balanced-angle.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-balanced-curly"
-path = "reducers/balanced-curly.rs"
+path = "src/bin/reducers/balanced-curly.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-balanced-paren"
-path = "reducers/balanced-paren.rs"
+path = "src/bin/reducers/balanced-paren.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-balanced-square"
-path = "reducers/balanced-square.rs"
+path = "src/bin/reducers/balanced-square.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-blank"
-path = "reducers/blank.rs"
+path = "src/bin/reducers/blank.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-chunks"
-path = "reducers/chunks.rs"
+path = "src/bin/reducers/chunks.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-aggregate-to-scalar"
-path = "reducers/clang-delta-aggregate-to-scalar.rs"
+path = "src/bin/reducers/clang-delta-aggregate-to-scalar.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-callexpr-to-value"
-path = "reducers/clang-delta-callexpr-to-value.rs"
+path = "src/bin/reducers/clang-delta-callexpr-to-value.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-class-template-to-class"
-path = "reducers/clang-delta-class-template-to-class.rs"
+path = "src/bin/reducers/clang-delta-class-template-to-class.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-combine-global-var"
-path = "reducers/clang-delta-combine-global-var.rs"
+path = "src/bin/reducers/clang-delta-combine-global-var.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-combine-local-var"
-path = "reducers/clang-delta-combine-local-var.rs"
+path = "src/bin/reducers/clang-delta-combine-local-var.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-copy-propagation"
-path = "reducers/clang-delta-copy-propagation.rs"
+path = "src/bin/reducers/clang-delta-copy-propagation.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-empty-struct-to-int"
-path = "reducers/clang-delta-empty-struct-to-int.rs"
+path = "src/bin/reducers/clang-delta-empty-struct-to-int.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-instantiate-template-param"
-path = "reducers/clang-delta-instantiate-template-param.rs"
+path = "src/bin/reducers/clang-delta-instantiate-template-param.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-instantiate-template-type-param-to-int"
-path = "reducers/clang-delta-instantiate-template-type-param-to-int.rs"
+path = "src/bin/reducers/clang-delta-instantiate-template-type-param-to-int.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-lift-assignment-expr"
-path = "reducers/clang-delta-lift-assignment-expr.rs"
+path = "src/bin/reducers/clang-delta-lift-assignment-expr.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-local-to-global"
-path = "reducers/clang-delta-local-to-global.rs"
+path = "src/bin/reducers/clang-delta-local-to-global.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-move-function-body"
-path = "reducers/clang-delta-move-function-body.rs"
+path = "src/bin/reducers/clang-delta-move-function-body.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-move-global-var"
-path = "reducers/clang-delta-move-global-var.rs"
+path = "src/bin/reducers/clang-delta-move-global-var.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-param-to-global"
-path = "reducers/clang-delta-param-to-global.rs"
+path = "src/bin/reducers/clang-delta-param-to-global.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-param-to-local"
-path = "reducers/clang-delta-param-to-local.rs"
+path = "src/bin/reducers/clang-delta-param-to-local.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-reduce-array-dim"
-path = "reducers/clang-delta-reduce-array-dim.rs"
+path = "src/bin/reducers/clang-delta-reduce-array-dim.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-reduce-array-size"
-path = "reducers/clang-delta-reduce-array-size.rs"
+path = "src/bin/reducers/clang-delta-reduce-array-size.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-reduce-class-template-param"
-path = "reducers/clang-delta-reduce-class-template-param.rs"
+path = "src/bin/reducers/clang-delta-reduce-class-template-param.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-reduce-pointer-level"
-path = "reducers/clang-delta-reduce-pointer-level.rs"
+path = "src/bin/reducers/clang-delta-reduce-pointer-level.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-reduce-pointer-pairs"
-path = "reducers/clang-delta-reduce-pointer-pairs.rs"
+path = "src/bin/reducers/clang-delta-reduce-pointer-pairs.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-addr-taken"
-path = "reducers/clang-delta-remove-addr-taken.rs"
+path = "src/bin/reducers/clang-delta-remove-addr-taken.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-array"
-path = "reducers/clang-delta-remove-array.rs"
+path = "src/bin/reducers/clang-delta-remove-array.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-base-class"
-path = "reducers/clang-delta-remove-base-class.rs"
+path = "src/bin/reducers/clang-delta-remove-base-class.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-ctor-initializer"
-path = "reducers/clang-delta-remove-ctor-initializer.rs"
+path = "src/bin/reducers/clang-delta-remove-ctor-initializer.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-enum-member-value"
-path = "reducers/clang-delta-remove-enum-member-value.rs"
+path = "src/bin/reducers/clang-delta-remove-enum-member-value.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-namespace"
-path = "reducers/clang-delta-remove-namespace.rs"
+path = "src/bin/reducers/clang-delta-remove-namespace.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-nested-function"
-path = "reducers/clang-delta-remove-nested-function.rs"
+path = "src/bin/reducers/clang-delta-remove-nested-function.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-pointer"
-path = "reducers/clang-delta-remove-pointer.rs"
+path = "src/bin/reducers/clang-delta-remove-pointer.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-trivial-base-template"
-path = "reducers/clang-delta-remove-trivial-base-template.rs"
+path = "src/bin/reducers/clang-delta-remove-trivial-base-template.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-unresolved-base"
-path = "reducers/clang-delta-remove-unresolved-base.rs"
+path = "src/bin/reducers/clang-delta-remove-unresolved-base.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-unused-enum-member"
-path = "reducers/clang-delta-remove-unused-enum-member.rs"
+path = "src/bin/reducers/clang-delta-remove-unused-enum-member.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-unused-field"
-path = "reducers/clang-delta-remove-unused-field.rs"
+path = "src/bin/reducers/clang-delta-remove-unused-field.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-unused-function"
-path = "reducers/clang-delta-remove-unused-function.rs"
+path = "src/bin/reducers/clang-delta-remove-unused-function.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-remove-unused-outer-class"
-path = "reducers/clang-delta-remove-unused-outer-class.rs"
+path = "src/bin/reducers/clang-delta-remove-unused-outer-class.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-rename-class"
-path = "reducers/clang-delta-rename-class.rs"
+path = "src/bin/reducers/clang-delta-rename-class.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-rename-cxx-method"
-path = "reducers/clang-delta-rename-cxx-method.rs"
+path = "src/bin/reducers/clang-delta-rename-cxx-method.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-rename-fun"
-path = "reducers/clang-delta-rename-fun.rs"
+path = "src/bin/reducers/clang-delta-rename-fun.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-rename-param"
-path = "reducers/clang-delta-rename-param.rs"
+path = "src/bin/reducers/clang-delta-rename-param.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-rename-var"
-path = "reducers/clang-delta-rename-var.rs"
+path = "src/bin/reducers/clang-delta-rename-var.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-replace-array-access-with-index"
-path = "reducers/clang-delta-replace-array-access-with-index.rs"
+path = "src/bin/reducers/clang-delta-replace-array-access-with-index.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-replace-array-index-var"
-path = "reducers/clang-delta-replace-array-index-var.rs"
+path = "src/bin/reducers/clang-delta-replace-array-index-var.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-replace-callexpr"
-path = "reducers/clang-delta-replace-callexpr.rs"
+path = "src/bin/reducers/clang-delta-replace-callexpr.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-replace-class-with-base-template-spec"
-path = "reducers/clang-delta-replace-class-with-base-template-spec.rs"
+path = "src/bin/reducers/clang-delta-replace-class-with-base-template-spec.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-replace-dependent-name"
-path = "reducers/clang-delta-replace-dependent-name.rs"
+path = "src/bin/reducers/clang-delta-replace-dependent-name.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-replace-dependent-typedef"
-path = "reducers/clang-delta-replace-dependent-typedef.rs"
+path = "src/bin/reducers/clang-delta-replace-dependent-typedef.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-replace-derived-class"
-path = "reducers/clang-delta-replace-derived-class.rs"
+path = "src/bin/reducers/clang-delta-replace-derived-class.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-replace-function-def-with-decl"
-path = "reducers/clang-delta-replace-function-def-with-decl.rs"
+path = "src/bin/reducers/clang-delta-replace-function-def-with-decl.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-replace-one-level-typedef-type"
-path = "reducers/clang-delta-replace-one-level-typedef-type.rs"
+path = "src/bin/reducers/clang-delta-replace-one-level-typedef-type.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-replace-simple-typedef"
-path = "reducers/clang-delta-replace-simple-typedef.rs"
+path = "src/bin/reducers/clang-delta-replace-simple-typedef.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-replace-undefined-function"
-path = "reducers/clang-delta-replace-undefined-function.rs"
+path = "src/bin/reducers/clang-delta-replace-undefined-function.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-return-void"
-path = "reducers/clang-delta-return-void.rs"
+path = "src/bin/reducers/clang-delta-return-void.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-simple-inliner"
-path = "reducers/clang-delta-simple-inliner.rs"
+path = "src/bin/reducers/clang-delta-simple-inliner.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-simplify-callexpr"
-path = "reducers/clang-delta-simplify-callexpr.rs"
+path = "src/bin/reducers/clang-delta-simplify-callexpr.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-simplify-comma-expr"
-path = "reducers/clang-delta-simplify-comma-expr.rs"
+path = "src/bin/reducers/clang-delta-simplify-comma-expr.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-simplify-dependent-typedef"
-path = "reducers/clang-delta-simplify-dependent-typedef.rs"
+path = "src/bin/reducers/clang-delta-simplify-dependent-typedef.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-simplify-if"
-path = "reducers/clang-delta-simplify-if.rs"
+path = "src/bin/reducers/clang-delta-simplify-if.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-simplify-nested-class"
-path = "reducers/clang-delta-simplify-nested-class.rs"
+path = "src/bin/reducers/clang-delta-simplify-nested-class.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-simplify-recursive-template-instantiation"
-path = "reducers/clang-delta-simplify-recursive-template-instantiation.rs"
+path = "src/bin/reducers/clang-delta-simplify-recursive-template-instantiation.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-simplify-struct-union-decl"
-path = "reducers/clang-delta-simplify-struct-union-decl.rs"
+path = "src/bin/reducers/clang-delta-simplify-struct-union-decl.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-simplify-struct"
-path = "reducers/clang-delta-simplify-struct.rs"
+path = "src/bin/reducers/clang-delta-simplify-struct.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-template-arg-to-int"
-path = "reducers/clang-delta-template-arg-to-int.rs"
+path = "src/bin/reducers/clang-delta-template-arg-to-int.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-template-non-type-arg-to-int"
-path = "reducers/clang-delta-template-non-type-arg-to-int.rs"
+path = "src/bin/reducers/clang-delta-template-non-type-arg-to-int.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-unify-function-decl"
-path = "reducers/clang-delta-unify-function-decl.rs"
+path = "src/bin/reducers/clang-delta-unify-function-decl.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-union-to-struct"
-path = "reducers/clang-delta-union-to-struct.rs"
+path = "src/bin/reducers/clang-delta-union-to-struct.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-delta-vector-to-array"
-path = "reducers/clang-delta-vector-to-array.rs"
+path = "src/bin/reducers/clang-delta-vector-to-array.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clang-format"
-path = "reducers/clang-format.rs"
+path = "src/bin/reducers/clang-format.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-define"
-path = "reducers/clex-define.rs"
+path = "src/bin/reducers/clex-define.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-delete-string"
-path = "reducers/clex-delete-string.rs"
+path = "src/bin/reducers/clex-delete-string.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rename-toks"
-path = "reducers/clex-rename-toks.rs"
+path = "src/bin/reducers/clex-rename-toks.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-tok-pattern-4"
-path = "reducers/clex-rm-tok-pattern-4.rs"
+path = "src/bin/reducers/clex-rm-tok-pattern-4.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-1"
-path = "reducers/clex-rm-toks-1.rs"
+path = "src/bin/reducers/clex-rm-toks-1.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-10"
-path = "reducers/clex-rm-toks-10.rs"
+path = "src/bin/reducers/clex-rm-toks-10.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-11"
-path = "reducers/clex-rm-toks-11.rs"
+path = "src/bin/reducers/clex-rm-toks-11.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-12"
-path = "reducers/clex-rm-toks-12.rs"
+path = "src/bin/reducers/clex-rm-toks-12.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-13"
-path = "reducers/clex-rm-toks-13.rs"
+path = "src/bin/reducers/clex-rm-toks-13.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-14"
-path = "reducers/clex-rm-toks-14.rs"
+path = "src/bin/reducers/clex-rm-toks-14.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-15"
-path = "reducers/clex-rm-toks-15.rs"
+path = "src/bin/reducers/clex-rm-toks-15.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-16"
-path = "reducers/clex-rm-toks-16.rs"
+path = "src/bin/reducers/clex-rm-toks-16.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-2"
-path = "reducers/clex-rm-toks-2.rs"
+path = "src/bin/reducers/clex-rm-toks-2.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-3"
-path = "reducers/clex-rm-toks-3.rs"
+path = "src/bin/reducers/clex-rm-toks-3.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-4"
-path = "reducers/clex-rm-toks-4.rs"
+path = "src/bin/reducers/clex-rm-toks-4.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-5"
-path = "reducers/clex-rm-toks-5.rs"
+path = "src/bin/reducers/clex-rm-toks-5.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-6"
-path = "reducers/clex-rm-toks-6.rs"
+path = "src/bin/reducers/clex-rm-toks-6.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-7"
-path = "reducers/clex-rm-toks-7.rs"
+path = "src/bin/reducers/clex-rm-toks-7.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-8"
-path = "reducers/clex-rm-toks-8.rs"
+path = "src/bin/reducers/clex-rm-toks-8.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-clex-rm-toks-9"
-path = "reducers/clex-rm-toks-9.rs"
+path = "src/bin/reducers/clex-rm-toks-9.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-includes"
-path = "reducers/includes.rs"
+path = "src/bin/reducers/includes.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-topformflat-0"
-path = "reducers/topformflat-0.rs"
+path = "src/bin/reducers/topformflat-0.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-topformflat-1"
-path = "reducers/topformflat-1.rs"
+path = "src/bin/reducers/topformflat-1.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-topformflat-10"
-path = "reducers/topformflat-10.rs"
+path = "src/bin/reducers/topformflat-10.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-topformflat-2"
-path = "reducers/topformflat-2.rs"
+path = "src/bin/reducers/topformflat-2.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-topformflat-3"
-path = "reducers/topformflat-3.rs"
+path = "src/bin/reducers/topformflat-3.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-topformflat-4"
-path = "reducers/topformflat-4.rs"
+path = "src/bin/reducers/topformflat-4.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-topformflat-6"
-path = "reducers/topformflat-6.rs"
+path = "src/bin/reducers/topformflat-6.rs"
 
 [[bin]]
 doc = false
 name = "preduce-reducer-topformflat-8"
-path = "reducers/topformflat-8.rs"
+path = "src/bin/reducers/topformflat-8.rs"
 
 [dependencies]
 clap = "2.23.1"

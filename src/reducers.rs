@@ -78,13 +78,11 @@ impl Reducer for Box<Reducer> {
 
 /// A test case reducer that is implemented as an external script.
 ///
-/// ### IPC Protocol
+/// See the `preduce_ipc_types` crate's documentation for information on the IPC
+/// protocol.
 ///
-/// TODO FITZGEN
-///
-/// ### Example Reducer Script
-///
-/// TODO FITZGEN
+/// See the `preduce_reducer_script` crate's documentation for example reducer
+/// scripts.
 ///
 /// ### Example Rust Usage
 ///
