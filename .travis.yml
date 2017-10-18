@@ -4,23 +4,16 @@ language: rust
 # To get a new enough ubuntu that has creduce.
 dist: trusty
 
-# libssh2-sys, used by git2, requires a newer cmake than exists on Travis's
-# default setup.
 addons:
   apt:
-    sources:
-      - kalakris-cmake
     packages:
-      - cmake
       - creduce
       - clang-format-3.8
 
 rust:
   - stable
   - beta
-  # Rustup + Nightly is broken right now, and I can't figure out how to get
-  # allow_failures to work properly.
-  # - nightly
+  - nightly
 
 cache: cargo
 
@@ -29,11 +22,16 @@ env:
     - JOB="test"  PROFILE=""          FEATURES=""
     - JOB="test"  PROFILE="--release" FEATURES=""
     # JOB="bench" PROFILE="--release" FEATURES=""
-    - JOB="test"  PROFILE=""          FEATURES="signpost"
+    # JOB="test"  PROFILE=""          FEATURES="signpost"
     - JOB="test"  PROFILE="--release" FEATURES="signpost"
     # JOB="bench" PROFILE="--release" FEATURES="signpost"
 
 matrix:
   fast_finish: true
+  exclude:
+    - rust: beta
+      env: JOB="test"  PROFILE="--release" FEATURES="signpost"
+    - rust: nightly
+      env: JOB="test"  PROFILE="--release" FEATURES="signpost"
 
 script: ./ci/script.sh
