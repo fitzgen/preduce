@@ -1,3 +1,3 @@
 #[macro_use]
-extern crate preduce_reducer_script;
+extern crate preduce_clang_delta_reducer;
 clang_delta_reducer!("reduce-pointer-pairs");

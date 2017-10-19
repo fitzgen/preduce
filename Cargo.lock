@@ -1,14 +1,13 @@
 [root]
-name = "preduce_reducer_script"
+name = "preduce_topformflat_reducer"
 version = "0.1.0"
 dependencies = [
- "is_executable 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "preduce_ipc_types 0.1.0",
- "regex 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "preduce_chunks_reducer 0.1.0",
+ "preduce_ranges_reducer 0.1.0",
+ "preduce_reducer_script 0.1.0",
  "serde 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -213,8 +212,15 @@ dependencies = [
  "lazy_static 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "preduce_balanced_reducer 0.1.0",
+ "preduce_chunks_reducer 0.1.0",
+ "preduce_clang_delta_reducer 0.1.0",
+ "preduce_clex_reducer 0.1.0",
  "preduce_ipc_types 0.1.0",
+ "preduce_ranges_reducer 0.1.0",
  "preduce_reducer_script 0.1.0",
+ "preduce_regex_reducer 0.1.0",
+ "preduce_topformflat_reducer 0.1.0",
  "rand 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -225,12 +231,77 @@ dependencies = [
 ]
 
 [[package]]
+name = "preduce_balanced_reducer"
+version = "0.1.0"
+dependencies = [
+ "preduce_ranges_reducer 0.1.0",
+]
+
+[[package]]
+name = "preduce_chunks_reducer"
+version = "0.1.0"
+dependencies = [
+ "preduce_ranges_reducer 0.1.0",
+ "serde 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "preduce_clang_delta_reducer"
+version = "0.1.0"
+dependencies = [
+ "lazy_static 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "preduce_reducer_script 0.1.0",
+ "serde 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "preduce_clex_reducer"
+version = "0.1.0"
+dependencies = [
+ "lazy_static 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "preduce_reducer_script 0.1.0",
+ "serde 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "preduce_ipc_types"
 version = "0.1.0"
 dependencies = [
  "serde 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "preduce_ranges_reducer"
+version = "0.1.0"
+dependencies = [
+ "preduce_reducer_script 0.1.0",
+ "serde 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "preduce_reducer_script"
+version = "0.1.0"
+dependencies = [
+ "is_executable 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "preduce_ipc_types 0.1.0",
+ "serde 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "preduce_regex_reducer"
+version = "0.1.0"
+dependencies = [
+ "lazy_static 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "preduce_ranges_reducer 0.1.0",
+ "regex 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

@@ -11,7 +11,7 @@ use std::fmt;
 use std::panic;
 use std::sync::mpsc;
 use std::thread;
-use test_case::{self, TestCaseMethods};
+use test_case;
 use traits;
 
 /// An identifier for a request to an actor.
@@ -173,14 +173,16 @@ impl ReducerActor {
                     return Ok(());
                 }
                 ReducerMessage::SetNewSeed(new_seed) => {
-                    if current_state.is_some() && new_seed.provenance() == self.reducer.name() {
-                        current_state = self.reducer.next_state_on_interesting(
-                            &new_seed,
-                            current_seed
-                                .as_ref()
-                                .expect("if current_state is some, then current_seed is some"),
-                            current_state.as_ref().unwrap(),
-                        )?;
+                    current_state = None;
+
+                    if let Some(potential_reduction) = new_seed.as_potential_reduction() {
+                        if let Some((old_seed, old_state)) = active_states.remove(potential_reduction) {
+                            current_state = self.reducer.next_state_on_interesting(
+                                &new_seed,
+                                &old_seed,
+                                &old_state
+                            )?;
+                        }
                     }
 
                     if current_state.is_none() {

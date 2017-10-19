@@ -1,9 +1,9 @@
 #[macro_use]
 extern crate lazy_static;
-extern crate preduce_reducer_script;
+extern crate preduce_regex_reducer;
 extern crate regex;
 
-use preduce_reducer_script::{run_regex, RemoveRegex};
+use preduce_regex_reducer::{run_regex, RemoveRegex};
 use regex::bytes::Regex;
 
 struct Includes;

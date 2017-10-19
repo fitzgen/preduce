@@ -1,0 +1,12 @@
+[package]
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+name = "preduce_ranges_reducer"
+version = "0.1.0"
+
+[dependencies]
+serde = "1.0.15"
+serde_derive = "1.0.15"
+
+[dependencies.preduce_reducer_script]
+path = "../preduce_reducer_script"
+version = "0.1.0"
