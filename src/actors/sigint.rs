@@ -52,7 +52,9 @@ impl Sigint {
             // Just ignore any potential error setting the handler. It just
             // means that if we do get a SIGINT, then we'll be shutdown
             // un-gracefully at that time.
-            let _ = ctrlc::set_handler(move || { GOT_SIGINT.store(true, Ordering::SeqCst); });
+            let _ = ctrlc::set_handler(move || {
+                GOT_SIGINT.store(true, Ordering::SeqCst);
+            });
         });
 
         loop {

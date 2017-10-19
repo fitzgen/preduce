@@ -1,0 +1,13 @@
+[package]
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+name = "preduce_clex_reducer"
+version = "0.1.0"
+
+[dependencies]
+lazy_static = "0.2.9"
+serde = "1.0.15"
+serde_derive = "1.0.15"
+
+[dependencies.preduce_reducer_script]
+path = "../preduce_reducer_script"
+version = "0.1.0"

@@ -194,8 +194,8 @@ where
 {
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
         Ok(
-            self.first.is_interesting(potential_reduction)? &&
-                self.second.is_interesting(potential_reduction)?,
+            self.first.is_interesting(potential_reduction)?
+                && self.second.is_interesting(potential_reduction)?,
         )
     }
 
@@ -257,8 +257,8 @@ where
 {
     fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
         Ok(
-            self.first.is_interesting(potential_reduction)? ||
-                self.second.is_interesting(potential_reduction)?,
+            self.first.is_interesting(potential_reduction)?
+                || self.second.is_interesting(potential_reduction)?,
         )
     }
 

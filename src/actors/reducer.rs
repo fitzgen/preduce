@@ -94,11 +94,9 @@ impl Reducer {
 
     /// Send the reducer the response to its request for another potential
     /// reduction.
-    pub fn request_next_reduction(
-        &self,
-        interesting: Option<test_case::Interesting>
-    ) {
-        let _ = self.sender.send(ReducerMessage::RequestNextReduction(interesting));
+    pub fn request_next_reduction(&self, interesting: Option<test_case::Interesting>) {
+        let _ = self.sender
+            .send(ReducerMessage::RequestNextReduction(interesting));
     }
 
     /// Reseed this reducer actor with the given test case.
@@ -165,7 +163,7 @@ impl ReducerActor {
         // current seed.
         let mut active_states: HashMap<
             test_case::PotentialReduction,
-            (test_case::Interesting, Box<Any + Send>)
+            (test_case::Interesting, Box<Any + Send>),
         > = Default::default();
 
         for msg in &self.incoming {
@@ -175,20 +173,37 @@ impl ReducerActor {
                     return Ok(());
                 }
                 ReducerMessage::SetNewSeed(new_seed) => {
-                    current_state = Some(self.reducer.new_state(&new_seed)?);
+                    current_state = None;
+
+                    if let Some(potential_reduction) = new_seed.as_potential_reduction() {
+                        if let Some((old_seed, old_state)) = active_states.remove(potential_reduction) {
+                            current_state = self.reducer.next_state_on_interesting(
+                                &new_seed,
+                                &old_seed,
+                                &old_state
+                            )?;
+                        }
+                    }
+
+                    if current_state.is_none() {
+                        current_state = Some(self.reducer.new_state(&new_seed)?);
+                    }
+
                     current_seed = Some(new_seed);
                 }
                 ReducerMessage::NotInteresting(reduction) => {
-                    active_states.remove(&reduction)
-                        .expect("Reducer actors should only be informed of their own \
-                                 reductions' interesting-ness");
+                    active_states.remove(&reduction).expect(
+                        "Reducer actors should only be informed of their own \
+                         reductions' interesting-ness",
+                    );
                 }
                 ReducerMessage::RequestNextReduction(interesting) => {
                     let _signpost = signposts::ReducerNextReduction::new();
 
                     self.logger.start_generating_next_reduction(self.me.id);
 
-                    let seed = current_seed.clone()
+                    let seed = current_seed
+                        .clone()
                         .expect("must not RequestNextReduction before SetNewSeed");
 
                     let state = match current_state.take() {
@@ -203,15 +218,18 @@ impl ReducerActor {
                         None => self.reducer.next_state(&seed, &state)?,
                         Some(new_seed) => {
                             let current_state = {
-                                let old_potential_reduction = new_seed.as_potential_reduction()
-                                    .expect("RequestNextReduction's interesting test case must \
-                                             hail from a potential reduction");
-                                let (old_seed, old_state) = active_states.remove(old_potential_reduction)
+                                let old_potential_reduction =
+                                    new_seed.as_potential_reduction().expect(
+                                        "RequestNextReduction's interesting test case must \
+                                         hail from a potential reduction",
+                                    );
+                                let (old_seed, old_state) = active_states
+                                    .remove(old_potential_reduction)
                                     .expect("RequestNextReduction with an unknown RequestId");
                                 self.reducer.next_state_on_interesting(
                                     &new_seed,
                                     &old_seed,
-                                    &old_state
+                                    &old_state,
                                 )?
                             };
                             current_seed = Some(new_seed);

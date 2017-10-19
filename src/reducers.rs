@@ -26,8 +26,8 @@ impl Reducer for Box<Reducer> {
     }
 
     fn clone_boxed(&self) -> Box<Reducer>
-        where
-        Self: 'static
+    where
+        Self: 'static,
     {
         (**self).clone_boxed()
     }
@@ -43,7 +43,7 @@ impl Reducer for Box<Reducer> {
     fn next_state(
         &mut self,
         seed: &test_case::Interesting,
-        prev_state: &Box<Any + Send>
+        prev_state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>> {
         (**self).next_state(seed, prev_state)
     }
@@ -52,7 +52,7 @@ impl Reducer for Box<Reducer> {
         &mut self,
         new_seed: &test_case::Interesting,
         old_seed: &test_case::Interesting,
-        prev_state: &Box<Any + Send>
+        prev_state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>> {
         (**self).next_state_on_interesting(new_seed, old_seed, prev_state)
     }
@@ -61,7 +61,7 @@ impl Reducer for Box<Reducer> {
         &mut self,
         seed: &test_case::Interesting,
         n: usize,
-        prev_state: &Box<Any + Send>
+        prev_state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>> {
         (**self).fast_forward_states(seed, n, prev_state)
     }
@@ -73,7 +73,6 @@ impl Reducer for Box<Reducer> {
     ) -> error::Result<Option<test_case::PotentialReduction>> {
         (**self).reduce(seed, state)
     }
-
 }
 
 /// A test case reducer that is implemented as an external script.
@@ -191,7 +190,9 @@ impl Script {
                 }
                 child.wait()?;
                 Ok(())
-            })().is_err() {
+            })()
+                .is_err()
+            {
                 self.kill_child();
             }
             self.child_stdout = None;
@@ -241,7 +242,8 @@ impl Script {
             stdout.read_line(&mut line)?;
             let response: Response = serde_json::from_str(&line)?;
             Ok(response)
-        })() {
+        })()
+        {
             r @ Ok(_) => r,
             e @ Err(_) => {
                 self.kill_child();
@@ -281,7 +283,9 @@ impl Reducer for Script {
             self.spawn_child()?;
         }
 
-        let response = self.request(Request::New(NewRequest { seed: seed.path().into() }))?;
+        let response = self.request(Request::New(NewRequest {
+            seed: seed.path().into(),
+        }))?;
         match response {
             Response::New(NewResponse { state }) => Ok(Box::new(state)),
             otherwise => {
@@ -303,7 +307,7 @@ impl Reducer for Script {
     fn next_state(
         &mut self,
         seed: &test_case::Interesting,
-        state: &Box<Any + Send>
+        state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>> {
         // It's possible that we killed the child for misbehaving since we
         // generated this state, so we can't assert that the child exists.
@@ -337,7 +341,7 @@ impl Reducer for Script {
         &mut self,
         new_seed: &test_case::Interesting,
         old_seed: &test_case::Interesting,
-        state: &Box<Any + Send>
+        state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>> {
         if self.child.is_none() {
             self.spawn_child()?;
@@ -370,7 +374,7 @@ impl Reducer for Script {
         &mut self,
         seed: &test_case::Interesting,
         n: usize,
-        state: &Box<Any + Send>
+        state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>> {
         if self.child.is_none() {
             self.spawn_child()?;
@@ -402,7 +406,7 @@ impl Reducer for Script {
     fn reduce(
         &mut self,
         seed: &test_case::Interesting,
-        state: &Box<Any + Send>
+        state: &Box<Any + Send>,
     ) -> error::Result<Option<test_case::PotentialReduction>> {
         if self.child.is_none() {
             self.spawn_child()?;
@@ -429,12 +433,10 @@ impl Reducer for Script {
                 Ok(Some(test_case::PotentialReduction::new(
                     seed.clone(),
                     self.program.to_string_lossy(),
-                    temp_file
+                    temp_file,
                 )?))
             }
-            Response::Reduce(ReduceResponse { reduced: false }) => {
-                Ok(None)
-            }
+            Response::Reduce(ReduceResponse { reduced: false }) => Ok(None),
             otherwise => {
                 let program = self.program.to_string_lossy().to_string();
                 self.misbehaving_reducer_script(format!(
@@ -504,13 +506,12 @@ impl<R> Fuse<R> {
     /// Ensure that the given `reducer` ends after having emitted `Ok(None)` or
     /// `Err`.
     pub fn new(inner: R) -> Fuse<R> {
-        Fuse {
-            inner: inner,
-        }
+        Fuse { inner: inner }
     }
 
     fn downcast<'a, 'b>(&'a self, state: &'b Box<Any + Send>) -> &'b RefCell<FuseState> {
-        state.downcast_ref::<RefCell<FuseState>>()
+        state
+            .downcast_ref::<RefCell<FuseState>>()
             .expect("Fuse::downcast given unexpected state")
     }
 }
@@ -542,16 +543,16 @@ where
         let state = state.borrow();
         match *state {
             FuseState::Finished => Box::new(RefCell::new(FuseState::Finished)),
-            FuseState::NotFinished(ref inner) => {
-                Box::new(RefCell::new(FuseState::NotFinished(self.inner.clone_state(inner))))
-            }
+            FuseState::NotFinished(ref inner) => Box::new(RefCell::new(
+                FuseState::NotFinished(self.inner.clone_state(inner)),
+            )),
         }
     }
 
     fn next_state(
         &mut self,
         seed: &test_case::Interesting,
-        prev_state: &Box<Any + Send>
+        prev_state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>> {
         let prev_state = self.downcast(prev_state);
         let mut prev_state = prev_state.borrow_mut();
@@ -562,9 +563,7 @@ where
         };
 
         match result {
-            Ok(Some(inner)) => {
-                Ok(Some(Box::new(RefCell::new(FuseState::NotFinished(inner)))))
-            }
+            Ok(Some(inner)) => Ok(Some(Box::new(RefCell::new(FuseState::NotFinished(inner))))),
             result @ Ok(None) | result @ Err(_) => {
                 *prev_state = FuseState::Finished;
                 result
@@ -576,7 +575,7 @@ where
         &mut self,
         new_seed: &test_case::Interesting,
         old_seed: &test_case::Interesting,
-        prev_state: &Box<Any + Send>
+        prev_state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>> {
         let prev_state = self.downcast(prev_state);
         let mut prev_state = prev_state.borrow_mut();
@@ -584,14 +583,13 @@ where
         let result = match *prev_state {
             FuseState::Finished => return Ok(None),
             FuseState::NotFinished(ref inner) => {
-                self.inner.next_state_on_interesting(new_seed, old_seed, inner)
+                self.inner
+                    .next_state_on_interesting(new_seed, old_seed, inner)
             }
         };
 
         match result {
-            Ok(Some(inner)) => {
-                Ok(Some(Box::new(RefCell::new(FuseState::NotFinished(inner)))))
-            }
+            Ok(Some(inner)) => Ok(Some(Box::new(RefCell::new(FuseState::NotFinished(inner))))),
             result @ Ok(None) | result @ Err(_) => {
                 *prev_state = FuseState::Finished;
                 result
@@ -603,22 +601,18 @@ where
         &mut self,
         seed: &test_case::Interesting,
         n: usize,
-        prev_state: &Box<Any + Send>
+        prev_state: &Box<Any + Send>,
     ) -> error::Result<Option<Box<Any + Send>>> {
         let prev_state = self.downcast(prev_state);
         let mut prev_state = prev_state.borrow_mut();
 
         let result = match *prev_state {
             FuseState::Finished => return Ok(None),
-            FuseState::NotFinished(ref inner) => {
-                self.inner.fast_forward_states(seed, n, inner)
-            }
+            FuseState::NotFinished(ref inner) => self.inner.fast_forward_states(seed, n, inner),
         };
 
         match result {
-            Ok(Some(inner)) => {
-                Ok(Some(Box::new(RefCell::new(FuseState::NotFinished(inner)))))
-            }
+            Ok(Some(inner)) => Ok(Some(Box::new(RefCell::new(FuseState::NotFinished(inner))))),
             result @ Ok(None) | result @ Err(_) => {
                 *prev_state = FuseState::Finished;
                 result
@@ -629,7 +623,7 @@ where
     fn reduce(
         &mut self,
         seed: &test_case::Interesting,
-        state: &Box<Any + Send>
+        state: &Box<Any + Send>,
     ) -> error::Result<Option<test_case::PotentialReduction>> {
         let state = self.downcast(state);
         let mut state = state.borrow_mut();
@@ -684,7 +678,7 @@ mod tests {
             fn next_state(
                 &mut self,
                 _seed: &test_case::Interesting,
-                _prev_state: &Box<Any + Send>
+                _prev_state: &Box<Any + Send>,
             ) -> error::Result<Option<Box<Any + Send>>> {
                 Ok(Some(Box::new(())))
             }
@@ -693,7 +687,7 @@ mod tests {
                 &mut self,
                 _new_seed: &test_case::Interesting,
                 _old_seed: &test_case::Interesting,
-                _prev_state: &Box<Any + Send>
+                _prev_state: &Box<Any + Send>,
             ) -> error::Result<Option<Box<Any + Send>>> {
                 Ok(Some(Box::new(())))
             }
@@ -701,7 +695,7 @@ mod tests {
             fn reduce(
                 &mut self,
                 _seed: &test_case::Interesting,
-                _state: &Box<Any + Send>
+                _state: &Box<Any + Send>,
             ) -> error::Result<Option<test_case::PotentialReduction>> {
                 let result = match self.0 % 3 {
                     0 => Ok(Some(test_case::PotentialReduction::testing_only_new())),

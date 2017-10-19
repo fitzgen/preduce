@@ -530,12 +530,40 @@ serde_derive = "1.0.15"
 serde_json = "1.0.3"
 tempdir = "0.3.5"
 
+[dependencies.preduce_balanced_reducer]
+path = "./preduce_balanced_reducer"
+version = "0.1.0"
+
+[dependencies.preduce_chunks_reducer]
+path = "./preduce_chunks_reducer"
+version = "0.1.0"
+
+[dependencies.preduce_clang_delta_reducer]
+path = "./preduce_clang_delta_reducer"
+version = "0.1.0"
+
+[dependencies.preduce_clex_reducer]
+path = "./preduce_clex_reducer"
+version = "0.1.0"
+
 [dependencies.preduce_ipc_types]
 path = "./preduce_ipc_types"
 version = "0.1.0"
 
+[dependencies.preduce_ranges_reducer]
+path = "./preduce_ranges_reducer"
+version = "0.1.0"
+
 [dependencies.preduce_reducer_script]
 path = "./preduce_reducer_script"
+version = "0.1.0"
+
+[dependencies.preduce_regex_reducer]
+path = "./preduce_regex_reducer"
+version = "0.1.0"
+
+[dependencies.preduce_topformflat_reducer]
+path = "./preduce_topformflat_reducer"
 version = "0.1.0"
 
 [dependencies.signpost]
@@ -544,8 +572,10 @@ version = "0.1.0"
 
 [lib]
 path = "src/lib.rs"
+
 [profile.release]
 debug = true
+
 [target."cfg(unix)".dependencies]
 libc = "0.2.26"
 

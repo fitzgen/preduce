@@ -1,0 +1,12 @@
+[package]
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+name = "preduce_regex_reducer"
+version = "0.1.0"
+
+[dependencies]
+lazy_static = "0.2.9"
+regex = "0.2.2"
+
+[dependencies.preduce_ranges_reducer]
+path = "../preduce_ranges_reducer"
+version = "0.1.0"

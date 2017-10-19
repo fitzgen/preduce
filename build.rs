@@ -2,6 +2,8 @@ use std::env;
 use std::fs;
 
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+
     if env::var("TRAVIS").ok().map_or(false, |v| v == "true") {
         println!("cargo:rustc-cfg=travis_ci");
     }

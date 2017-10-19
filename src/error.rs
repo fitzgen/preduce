@@ -72,9 +72,7 @@ impl error::Error for Error {
             Error::InitialTestCaseNotInteresting => {
                 "The initial test case did not pass the is-interesting predicate"
             }
-            Error::IsNotExecutable(_) => {
-                "The script is not executable"
-            }
+            Error::IsNotExecutable(_) => "The script is not executable",
             Error::DoesNotExist(_) => "There is no file at the given path, but we expected one",
         }
     }

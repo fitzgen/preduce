@@ -1,0 +1,8 @@
+[package]
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+name = "preduce_balanced_reducer"
+version = "0.1.0"
+
+[dependencies.preduce_ranges_reducer]
+path = "../preduce_ranges_reducer"
+version = "0.1.0"

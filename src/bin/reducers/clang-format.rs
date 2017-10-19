@@ -26,7 +26,7 @@ impl Reducer for ClangFormat {
     fn next_on_interesting(
         self,
         _old_seed: PathBuf,
-        _new_seed: PathBuf
+        _new_seed: PathBuf,
     ) -> io::Result<Option<Self>> {
         Ok(Some(self))
     }

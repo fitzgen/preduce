@@ -1,5 +1,5 @@
-extern crate preduce_reducer_script;
-use preduce_reducer_script::{RemoveBalanced, run_balanced};
+extern crate preduce_balanced_reducer;
+use preduce_balanced_reducer::{run_balanced, RemoveBalanced};
 
 struct Curlies;
 
