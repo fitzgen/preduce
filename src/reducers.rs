@@ -1,7 +1,5 @@
 //! Concrete implementations of `preduce::traits::Reducer`.
 
-extern crate rand;
-
 use error;
 use is_executable::IsExecutable;
 use preduce_ipc_types::{FastForwardRequest, NewRequest, NextOnInterestingRequest, NextRequest,
