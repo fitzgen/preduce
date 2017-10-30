@@ -1,15 +1,45 @@
 //! Types related to test cases, their interestingness, and candidates
 //! of them.
 
+use blake2::{Blake2b, Digest};
 use either::{Either, Left, Right};
 use error;
+use generic_array;
 use std::fs;
 use std::hash;
-use std::io;
+use std::io::{self, Read};
 use std::path;
+use std::process;
 use std::sync::Arc;
 use tempdir;
 use traits;
+use typenum;
+
+/// The result of `Blake2b::digest`.
+///
+/// This is terrible.
+pub type Blake2Hash = generic_array::GenericArray<
+    u8,
+    typenum::uint::UInt<
+        typenum::uint::UInt<
+            typenum::uint::UInt<
+                typenum::uint::UInt<
+                    typenum::uint::UInt<
+                        typenum::uint::UInt<
+                            typenum::uint::UInt<typenum::uint::UTerm, typenum::bit::B1>,
+                            typenum::bit::B0,
+                        >,
+                        typenum::bit::B0,
+                    >,
+                    typenum::bit::B0,
+                >,
+                typenum::bit::B0,
+            >,
+            typenum::bit::B0,
+        >,
+        typenum::bit::B0,
+    >,
+>;
 
 /// Methods common to all test cases.
 pub trait TestCaseMethods: Into<TempFile> + hash::Hash {
@@ -26,6 +56,13 @@ pub trait TestCaseMethods: Into<TempFile> + hash::Hash {
 
     /// Get the provenance of this test case.
     fn provenance(&self) -> &str;
+
+    /// The hash of the full test case contents.
+    fn full_hash(&self) -> Blake2Hash;
+
+    /// The hash of the diff with the seed from which this test case was
+    /// generated, or hash of an empty diff if this is an initial test case.
+    fn diff_hash(&self) -> Blake2Hash;
 }
 
 #[derive(Debug, Clone)]
@@ -147,6 +184,12 @@ pub struct Candidate {
 
     /// The delta size from the parent test case.
     delta: u64,
+
+    /// The hash of the full contents.
+    full_hash: Blake2Hash,
+
+    /// The hash of the diff with the seed.
+    diff_hash: Blake2Hash,
 }
 
 impl hash::Hash for Candidate {
@@ -171,6 +214,33 @@ impl TestCaseMethods for Candidate {
     fn provenance(&self) -> &str {
         &self.provenance
     }
+
+    fn full_hash(&self) -> Blake2Hash {
+        self.full_hash
+    }
+
+    fn diff_hash(&self) -> Blake2Hash {
+        self.diff_hash
+    }
+}
+
+fn hash<R: Read>(mut src: R) -> error::Result<Blake2Hash> {
+    let mut hasher = Blake2b::default();
+    let mut buf = vec![0; 1024 * 1024];
+    loop {
+        let bytes_read = match src.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) => {
+                if e.kind() == io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(e.into());
+            }
+        };
+        hasher.input(&buf[..bytes_read]);
+    }
+    Ok(hasher.result())
 }
 
 impl Candidate {
@@ -197,13 +267,38 @@ impl Candidate {
         assert!(!provenance.is_empty());
 
         let test_case = test_case.into();
-        let size = fs::metadata(test_case.path())?.len();
+        let size;
+        let full_hash;
+        let diff_hash;
+        {
+            let path = test_case.path();
+            size = fs::metadata(&path)?.len();
 
+            let file = fs::File::open(&path)?;
+            full_hash = hash(file)?;
+
+            let diff = process::Command::new("diff")
+                .args(&[
+                    "--unchanged-line-format=''",
+                    "--new-line-format='+%L'",
+                    "--old-line-format='-%L'",
+                    &provenance,
+                    &path.display().to_string(),
+                ])
+                .stdout(process::Stdio::piped())
+                .stderr(process::Stdio::null())
+                .stdin(process::Stdio::null())
+                .output()?
+                .stdout;
+            diff_hash = hash(&diff[..])?;
+        }
         Ok(Candidate {
             provenance: provenance,
-            test_case: test_case,
+            test_case,
             size: size,
             delta: seed.size().saturating_sub(size),
+            full_hash,
+            diff_hash,
         })
     }
 
@@ -258,6 +353,14 @@ impl TestCaseMethods for Interesting {
     fn provenance(&self) -> &str {
         self.kind.provenance()
     }
+
+    fn full_hash(&self) -> Blake2Hash {
+        self.kind.full_hash()
+    }
+
+    fn diff_hash(&self) -> Blake2Hash {
+        self.kind.diff_hash()
+    }
 }
 
 impl Interesting {
@@ -285,11 +388,13 @@ impl Interesting {
         }
 
         let size = fs::metadata(temp_file.path())?.len();
+        let full_hash = hash(fs::File::open(file_path.as_ref())?)?;
 
         Ok(Some(Interesting {
             kind: InterestingKind::Initial(InitialInteresting {
                 test_case: temp_file,
                 size: size,
+                full_hash,
             }),
         }))
     }
@@ -349,6 +454,20 @@ impl TestCaseMethods for InterestingKind {
             InterestingKind::Candidate(ref r) => r.provenance(),
         }
     }
+
+    fn full_hash(&self) -> Blake2Hash {
+        match *self {
+            InterestingKind::Initial(ref i) => i.full_hash(),
+            InterestingKind::Candidate(ref r) => r.full_hash(),
+        }
+    }
+
+    fn diff_hash(&self) -> Blake2Hash {
+        match *self {
+            InterestingKind::Initial(ref i) => i.diff_hash(),
+            InterestingKind::Candidate(ref r) => r.diff_hash(),
+        }
+    }
 }
 
 /// The initial test case, after it has been validated to have passed the
@@ -360,6 +479,9 @@ struct InitialInteresting {
 
     /// The size of the file.
     size: u64,
+
+    /// The hash of the full file contents.
+    full_hash: Blake2Hash,
 }
 
 impl hash::Hash for InitialInteresting {
@@ -384,6 +506,14 @@ impl TestCaseMethods for InitialInteresting {
     fn provenance(&self) -> &str {
         "<initial>"
     }
+
+    fn full_hash(&self) -> Blake2Hash {
+        self.full_hash
+    }
+
+    fn diff_hash(&self) -> Blake2Hash {
+        hash(&[][..]).expect("reading from an empty slice cannot fail")
+    }
 }
 
 #[cfg(test)]
@@ -394,6 +524,8 @@ impl Candidate {
             test_case: TempFile::anonymous().unwrap(),
             size: 0,
             delta: 0,
+            full_hash: Default::default(),
+            diff_hash: Default::default(),
         }
     }
 }
@@ -405,6 +537,7 @@ impl Interesting {
             kind: InterestingKind::Initial(InitialInteresting {
                 test_case: TempFile::anonymous().unwrap(),
                 size: 0,
+                full_hash: Default::default(),
             }),
         }
     }

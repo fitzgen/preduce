@@ -12,15 +12,18 @@
 #![deny(missing_debug_implementations)]
 #![deny(unsafe_code)]
 
+extern crate blake2;
 extern crate ctrlc;
 extern crate either;
 extern crate fixedbitset;
+extern crate generic_array;
 extern crate histo;
 extern crate is_executable;
 extern crate num_cpus;
 extern crate preduce_ipc_types;
 extern crate serde_json;
 extern crate tempdir;
+extern crate typenum;
 
 mod actors;
 pub mod error;
