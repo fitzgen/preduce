@@ -60,9 +60,10 @@ impl<T: Topformflat> Reducer for TopformflatReducer<T> {
 
                 {
                     let flattened_file = fs::File::create(&flattened)?;
+                    let seed = fs::File::open(seed)?;
                     let status = process::Command::new(topformflat)
                         .arg(T::flatten().to_string())
-                        .arg(seed)
+                        .stdin(seed)
                         .stdout(flattened_file)
                         .status()?;
                     if !status.success() {
@@ -132,9 +133,10 @@ impl<T: Topformflat> Reducer for TopformflatReducer<T> {
 
         {
             let flattened_file = fs::File::create(&flattened)?;
+            let seed = fs::File::open(seed)?;
             let status = process::Command::new(topformflat)
                 .arg(T::flatten().to_string())
-                .arg(seed)
+                .stdin(seed)
                 .stdout(flattened_file)
                 .status()?;
             if !status.success() {
