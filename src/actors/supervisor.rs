@@ -539,18 +539,13 @@ where
             self.reseed_reducers(smallest_interesting)?;
             self.spawn_workers()?;
 
-            // Fourth, clear out any queued potential reductions that are larger
-            // than our new smallest interesting test case. We don't want to
-            // waste time on them. For any reduction we don't end up
-            // considering, tell its progenitor to generate its next reduction
-            // from the new seed.
+            // Fourth, clear out all queued potential reductions. We don't want
+            // to waste time on them, since they are most likely uninteresting,
+            // and we should prioritize candidates generated from the new
+            // smallest interesting test case.
             {
                 let reducers = &self.reducer_actors;
-                self.reduction_queue.retain(|reduction, reducer_id| {
-                    if reduction.size() < new_size {
-                        return true;
-                    }
-
+                self.reduction_queue.retain(|_reduction, reducer_id| {
                     reducers[&reducer_id].request_next_reduction(None);
                     false
                 });
