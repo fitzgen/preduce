@@ -1,11 +1,11 @@
 //! The supervisor actor manages workers, and brokers their access to new
-//! reductions.
+//! candidates.
 
 use super::{Logger, Reducer, ReducerId, Sigint, Worker, WorkerId};
 use super::super::Options;
 use error;
 use oracle;
-use queue::ReductionQueue;
+use queue::CandidateQueue;
 use signposts;
 use std::any::Any;
 use std::cmp;
@@ -24,13 +24,13 @@ enum SupervisorMessage {
     // From workers.
     WorkerPanicked(WorkerId, Box<Any + Send + 'static>),
     WorkerErrored(WorkerId, error::Error),
-    RequestNextReduction(Worker, Option<test_case::PotentialReduction>),
+    RequestNextCandidate(Worker, Option<test_case::Candidate>),
     ReportInteresting(Worker, test_case::Interesting),
 
     // From reducers.
     ReducerPanicked(ReducerId, Box<Any + Send + 'static>),
     ReducerErrored(ReducerId, error::Error),
-    ReplyNextReduction(Reducer, test_case::PotentialReduction),
+    ReplyNextCandidate(Reducer, test_case::Candidate),
     ReplyExhausted(Reducer, test_case::Interesting),
 
     // From the SIGINT actor.
@@ -46,7 +46,7 @@ pub struct Supervisor {
 /// Supervisor client API.
 impl Supervisor {
     /// Spawn the supervisor thread, which will in turn spawn workers and start
-    /// the test case reduction process.
+    /// the test case candidate process.
     pub fn spawn<I>(
         opts: Options<I>,
     ) -> error::Result<(Supervisor, thread::JoinHandle<error::Result<()>>)>
@@ -70,15 +70,15 @@ impl Supervisor {
 
     // Messages sent to the supervisor from the workers.
 
-    /// Request the next potentially-interesting test case reduction. The
+    /// Request the next potentially-interesting test case candidate. The
     /// response will be sent back to the `who` worker.
-    pub fn request_next_reduction(
+    pub fn request_next_candidate(
         &self,
         who: Worker,
-        not_interesting: Option<test_case::PotentialReduction>,
+        not_interesting: Option<test_case::Candidate>,
     ) {
         self.sender
-            .send(SupervisorMessage::RequestNextReduction(
+            .send(SupervisorMessage::RequestNextCandidate(
                 who,
                 not_interesting,
             ))
@@ -123,19 +123,19 @@ impl Supervisor {
             .unwrap();
     }
 
-    /// Tell the supervisor that there are no more reductions of the current
+    /// Tell the supervisor that there are no more candidates of the current
     /// test case.
-    pub fn no_more_reductions(&self, reducer: Reducer, seed: test_case::Interesting) {
+    pub fn no_more_candidates(&self, reducer: Reducer, seed: test_case::Interesting) {
         self.sender
             .send(SupervisorMessage::ReplyExhausted(reducer, seed))
             .unwrap();
     }
 
-    /// Give the supervisor the requested next reduction of the current test
+    /// Give the supervisor the requested next candidate of the current test
     /// case.
-    pub fn reply_next_reduction(&self, reducer: Reducer, reduction: test_case::PotentialReduction) {
+    pub fn reply_next_candidate(&self, reducer: Reducer, candidate: test_case::Candidate) {
         self.sender
-            .send(SupervisorMessage::ReplyNextReduction(reducer, reduction))
+            .send(SupervisorMessage::ReplyNextCandidate(reducer, candidate))
             .unwrap();
     }
 
@@ -170,7 +170,7 @@ where
     reducer_id_to_trait_object: HashMap<ReducerId, Box<traits::Reducer>>,
     reducers_without_actors: Vec<Box<traits::Reducer>>,
     exhausted_reducers: HashSet<ReducerId>,
-    reduction_queue: ReductionQueue,
+    candidate_queue: CandidateQueue,
 
     oracle: oracle::Join3<
         oracle::InterestingRate,
@@ -211,7 +211,7 @@ where
             reducer_id_to_trait_object: HashMap::with_capacity(num_reducers),
             reducers_without_actors,
             exhausted_reducers: HashSet::with_capacity(num_reducers),
-            reduction_queue: ReductionQueue::with_capacity(num_reducers),
+            candidate_queue: CandidateQueue::with_capacity(num_reducers),
             oracle: Default::default(),
         };
 
@@ -228,7 +228,7 @@ where
             supervisor.reseed_reducers(&smallest_interesting)?;
             supervisor.spawn_workers()?;
 
-            let should_continue = supervisor.reduction_loop_iteration(
+            let should_continue = supervisor.candidate_loop_iteration(
                 &incoming,
                 &mut smallest_interesting,
                 orig_size,
@@ -240,13 +240,13 @@ where
         }
     }
 
-    /// Run the supervisor's main loop, serving reductions to workers, and
+    /// Run the supervisor's main loop, serving candidates to workers, and
     /// keeping track of the globally smallest interesting test case.
     ///
     /// Returns `true` if we should continue another iteration if we've made any
     /// progress. Returns `false` if we should shutdown regardless whether we've
     /// made any progress.
-    fn reduction_loop_iteration(
+    fn candidate_loop_iteration(
         &mut self,
         incoming: &mpsc::Receiver<SupervisorMessage>,
         smallest_interesting: &mut test_case::Interesting,
@@ -267,11 +267,11 @@ where
                     self.restart_worker(id)?;
                 }
 
-                SupervisorMessage::RequestNextReduction(who, not_interesting) => {
+                SupervisorMessage::RequestNextCandidate(who, not_interesting) => {
                     if let Some(not_interesting) = not_interesting {
                         self.oracle.observe_not_interesting(&not_interesting);
                     }
-                    self.enqueue_worker_for_reduction(who);
+                    self.enqueue_worker_for_candidate(who);
                 }
 
                 SupervisorMessage::ReportInteresting(who, interesting) => {
@@ -310,27 +310,27 @@ where
                     assert!(self.reducer_actors.contains_key(&reducer.id()));
                     assert!(self.reducer_id_to_trait_object.contains_key(&reducer.id()));
 
-                    // If the seed whose reductions are exhausted is our current
+                    // If the seed whose candidates are exhausted is our current
                     // smallest, then the reducer really is exhausted. If it
                     // isn't the current smallest interesting test case, then
                     // the following sequence of events happened:
                     //
                     // * We sent a message requesting the reducer's next
-                    //   reduction
+                    //   candidate
                     // * While waiting for its response, we received a new
                     //   interesting test case, and it became our new smallest.
                     // * Because we discovered a new smallest interesting test
                     //   case, we sent reseed messages to every reducer,
                     //   including the reducer we just sent a request to.
                     // * At the same time, it sent back a reply to the original
-                    //   request, stating that its reductions are exhausted.
+                    //   request, stating that its candidates are exhausted.
                     //
                     // Worker           Supervisor            Reducer
                     //   |                  |                    |
                     //   |                  |\                   |
                     //   |\ interesting     | \ request          |
                     //   | \                |  \ next            |
-                    //   |  `---------------|   \ reduction      |
+                    //   |  `---------------|   \ candidate      |
                     //   |                  |    \               |
                     //   |                  |     \              |
                     //   |                  |      `-------------|
@@ -355,7 +355,7 @@ where
                     // current smallest, than the reducer is not actually
                     // exhuasted, and is in the process of reseeding
                     // itself. Additionally, we need to re-request its next
-                    // newly reseeded reduction; we usually do that for
+                    // newly reseeded candidate; we usually do that for
                     // exhausted reducers when sending the initial reseed
                     // message, but didn't for this one because it wasn't in the
                     // exhausted set at that time.
@@ -364,21 +364,21 @@ where
                         self.oracle.observe_exhausted(&name);
                         self.exhausted_reducers.insert(reducer.id());
                     } else {
-                        reducer.request_next_reduction(None);
+                        reducer.request_next_candidate(None);
                     }
                 }
 
-                SupervisorMessage::ReplyNextReduction(reducer, reduction) => {
+                SupervisorMessage::ReplyNextCandidate(reducer, candidate) => {
                     assert!(self.reducer_actors.contains_key(&reducer.id()));
 
-                    if reduction.size() < smallest_interesting.size() {
-                        let priority = self.oracle.predict(&reduction);
-                        self.reduction_queue
-                            .insert(reduction, reducer.id(), priority);
+                    if candidate.size() < smallest_interesting.size() {
+                        let priority = self.oracle.predict(&candidate);
+                        self.candidate_queue
+                            .insert(candidate, reducer.id(), priority);
                         self.drain_queues();
                     } else {
-                        reducer.not_interesting(reduction);
-                        reducer.request_next_reduction(None);
+                        reducer.not_interesting(candidate);
+                        reducer.request_next_candidate(None);
                     }
                 }
 
@@ -386,16 +386,16 @@ where
                     for (_, worker) in self.workers.drain() {
                         worker.shutdown();
                     }
-                    self.reduction_queue.clear();
+                    self.candidate_queue.clear();
                     return Ok(false);
                 }
             }
 
             // If all of our reducers are exhausted, and we are out of potential
-            // reductions to test, then shutdown any idle workers, since we
+            // candidates to test, then shutdown any idle workers, since we
             // don't have any work for them.
             if self.exhausted_reducers.len() == self.reducer_actors.len()
-                && self.reduction_queue.is_empty()
+                && self.candidate_queue.is_empty()
             {
                 for worker in self.idle_workers.drain(..) {
                     self.workers.remove(&worker.id());
@@ -418,7 +418,7 @@ where
         orig_size: u64,
     ) -> error::Result<()> {
         assert!(self.workers.is_empty());
-        assert!(self.reduction_queue.is_empty());
+        assert!(self.candidate_queue.is_empty());
         assert_eq!(self.exhausted_reducers.len(), self.reducer_actors.len());
 
         let _signpost = signposts::SupervisorShutdown::new();
@@ -466,47 +466,47 @@ where
         self.spawn_workers()
     }
 
-    /// Generate the next reduction and send it to the given worker, or shutdown
+    /// Generate the next candidate and send it to the given worker, or shutdown
     /// the worker if our reducer is exhausted.
-    fn enqueue_worker_for_reduction(&mut self, who: Worker) {
+    fn enqueue_worker_for_candidate(&mut self, who: Worker) {
         assert!(self.workers.contains_key(&who.id()));
 
         self.idle_workers.push(who);
         self.drain_queues();
     }
 
-    /// Given that either we've generated new potential reductions to test, or a
-    /// worker just became ready to test queued reductions, dispatch as many
-    /// reductions to workers as possible.
+    /// Given that either we've generated new candidates to test, or a
+    /// worker just became ready to test queued candidates, dispatch as many
+    /// candidates to workers as possible.
     fn drain_queues(&mut self) {
         assert!(
-            self.idle_workers.len() > 0 || self.reduction_queue.len() > 0,
+            self.idle_workers.len() > 0 || self.candidate_queue.len() > 0,
             "Should only call drain_queues when we have potential to do new work"
         );
 
-        let num_to_drain = cmp::min(self.idle_workers.len(), self.reduction_queue.len());
+        let num_to_drain = cmp::min(self.idle_workers.len(), self.candidate_queue.len());
         let workers = self.idle_workers.drain(..num_to_drain);
-        let reductions = self.reduction_queue.drain(..num_to_drain);
+        let candidates = self.candidate_queue.drain(..num_to_drain);
 
-        for (worker, (reduction, reducer_id)) in workers.zip(reductions) {
+        for (worker, (candidate, reducer_id)) in workers.zip(candidates) {
             assert!(self.workers.contains_key(&worker.id()));
             assert!(self.reducer_actors.contains_key(&reducer_id));
 
-            // Send the worker the next reduction from the queue to test for
+            // Send the worker the next candidate from the queue to test for
             // interestingness.
-            worker.next_reduction(reduction);
+            worker.next_candidate(candidate);
 
             // And pipeline the worker's is-interesting test with generating the
-            // next reduction.
+            // next candidate.
             if !self.exhausted_reducers.contains(&reducer_id) {
-                self.reducer_actors[&reducer_id].request_next_reduction(None);
+                self.reducer_actors[&reducer_id].request_next_candidate(None);
             }
         }
     }
 
     /// Given that the `who` worker just found a new interesting test case,
     /// either update our globally smallest interesting test case, or tell the
-    /// worker to try testing a new reduction.
+    /// worker to try testing a new candidate.
     fn handle_new_interesting_test_case(
         &mut self,
         who: Worker,
@@ -522,7 +522,7 @@ where
         if new_size < old_size {
             // We have a new globally smallest insteresting test case! First,
             // update the original test case file with the new interesting
-            // reduction. The reduction process can take a LONG time, and if the
+            // candidate. The candidate process can take a LONG time, and if the
             // computation is interrupted for whatever reason, we DO NOT want to
             // lose this incremental progress!
             *smallest_interesting = interesting;
@@ -534,26 +534,26 @@ where
 
             // Third, re-seed our reducer actors with the new test case, and
             // respawn any workers that might have shutdown because we exhausted
-            // all possible reductions on the previous smallest interesting test
+            // all possible candidates on the previous smallest interesting test
             // case.
             self.reseed_reducers(smallest_interesting)?;
             self.spawn_workers()?;
 
-            // Fourth, clear out all queued potential reductions. We don't want
+            // Fourth, clear out all queued candidates. We don't want
             // to waste time on them, since they are most likely uninteresting,
             // and we should prioritize candidates generated from the new
             // smallest interesting test case.
             {
                 let reducers = &self.reducer_actors;
-                self.reduction_queue.retain(|_reduction, reducer_id| {
-                    reducers[&reducer_id].request_next_reduction(None);
+                self.candidate_queue.retain(|_candidate, reducer_id| {
+                    reducers[&reducer_id].request_next_candidate(None);
                     false
                 });
             }
 
-            // Finaly send a new reduction to the worker that reported the new
+            // Finaly send a new candidate to the worker that reported the new
             // smallest test case.
-            self.enqueue_worker_for_reduction(who);
+            self.enqueue_worker_for_candidate(who);
         } else {
             // Although the test case is interesting, it is not smaller. This is
             // the unlikely case where we find two new interesting test cases at
@@ -562,7 +562,7 @@ where
             // abandon its current is-interesting test and move on to new work.
             self.oracle.observe_not_smallest_interesting(&interesting);
             self.logger.is_not_smaller(interesting);
-            self.enqueue_worker_for_reduction(who);
+            self.enqueue_worker_for_candidate(who);
         }
 
         Ok(())
@@ -656,12 +656,12 @@ where
             reducer_actor.set_new_seed(smallest_interesting.clone());
 
             // If the reducer was exhausted, put it back to work again by
-            // requesting the next reduction. If it isn't exhausted, then we
-            // will request its next reduction after we pull its most recently
-            // generated (or currently being generated) reduction from the
-            // reduction queue.
+            // requesting the next candidate. If it isn't exhausted, then we
+            // will request its next candidate after we pull its most recently
+            // generated (or currently being generated) candidate from the
+            // candidate queue.
             if self.exhausted_reducers.contains(id) {
-                reducer_actor.request_next_reduction(None);
+                reducer_actor.request_next_candidate(None);
                 self.exhausted_reducers.remove(id);
             }
         }

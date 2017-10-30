@@ -1,4 +1,4 @@
-//! Actors that orchestrate and perform the reduction search.
+//! Actors that orchestrate and perform the candidate search.
 
 mod logger;
 mod reducer;

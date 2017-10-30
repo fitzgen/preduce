@@ -1,5 +1,5 @@
 //! A reducer actor wraps a `preduce::traits::Reducer` trait object, allowing us
-//! to generate potential reductions from multiple reducers in parallel, and
+//! to generate candidates from multiple reducers in parallel, and
 //! pipelined with each worker that is testing interestingness.
 
 use super::{Logger, Supervisor};
@@ -34,8 +34,8 @@ impl fmt::Display for ReducerId {
 #[derive(Debug)]
 enum ReducerMessage {
     Shutdown,
-    RequestNextReduction(Option<test_case::Interesting>),
-    NotInteresting(test_case::PotentialReduction),
+    RequestNextCandidate(Option<test_case::Interesting>),
+    NotInteresting(test_case::Candidate),
     SetNewSeed(test_case::Interesting),
 }
 
@@ -88,15 +88,14 @@ impl Reducer {
 
     /// Tell the reducer that this test case was not interesting, and therefore
     /// it can forget about the state that generated it.
-    pub fn not_interesting(&self, test: test_case::PotentialReduction) {
+    pub fn not_interesting(&self, test: test_case::Candidate) {
         let _ = self.sender.send(ReducerMessage::NotInteresting(test));
     }
 
-    /// Send the reducer the response to its request for another potential
-    /// reduction.
-    pub fn request_next_reduction(&self, interesting: Option<test_case::Interesting>) {
+    /// Send the reducer the response to its request for another candidate.
+    pub fn request_next_candidate(&self, interesting: Option<test_case::Interesting>) {
         let _ = self.sender
-            .send(ReducerMessage::RequestNextReduction(interesting));
+            .send(ReducerMessage::RequestNextCandidate(interesting));
     }
 
     /// Reseed this reducer actor with the given test case.
@@ -157,12 +156,12 @@ impl ReducerActor {
         let mut current_seed = None;
         let mut current_state = None;
 
-        // A map from a reduction we generated that is actively being tested, to
+        // A map from a candidate we generated that is actively being tested, to
         // the seed it was generated from and the state used to generate
         // it. Note that the seed it was generated from is not necessarily the
         // current seed.
         let mut active_states: HashMap<
-            test_case::PotentialReduction,
+            test_case::Candidate,
             (test_case::Interesting, Box<Any + Send>),
         > = Default::default();
 
@@ -175,8 +174,8 @@ impl ReducerActor {
                 ReducerMessage::SetNewSeed(new_seed) => {
                     current_state = None;
 
-                    if let Some(potential_reduction) = new_seed.as_potential_reduction() {
-                        if let Some((old_seed, old_state)) = active_states.remove(potential_reduction) {
+                    if let Some(candidate) = new_seed.as_candidate() {
+                        if let Some((old_seed, old_state)) = active_states.remove(candidate) {
                             current_state = self.reducer.next_state_on_interesting(
                                 &new_seed,
                                 &old_seed,
@@ -191,20 +190,20 @@ impl ReducerActor {
 
                     current_seed = Some(new_seed);
                 }
-                ReducerMessage::NotInteresting(reduction) => {
-                    active_states.remove(&reduction).expect(
+                ReducerMessage::NotInteresting(candidate) => {
+                    active_states.remove(&candidate).expect(
                         "Reducer actors should only be informed of their own \
-                         reductions' interesting-ness",
+                         candidates' interesting-ness",
                     );
                 }
-                ReducerMessage::RequestNextReduction(interesting) => {
-                    let _signpost = signposts::ReducerNextReduction::new();
+                ReducerMessage::RequestNextCandidate(interesting) => {
+                    let _signpost = signposts::ReducerNextCandidate::new();
 
-                    self.logger.start_generating_next_reduction(self.me.id);
+                    self.logger.start_generating_next_candidate(self.me.id);
 
                     let seed = current_seed
                         .clone()
-                        .expect("must not RequestNextReduction before SetNewSeed");
+                        .expect("must not RequestNextCandidate before SetNewSeed");
 
                     let state = match current_state.take() {
                         Some(s) => s,
@@ -218,14 +217,14 @@ impl ReducerActor {
                         None => self.reducer.next_state(&seed, &state)?,
                         Some(new_seed) => {
                             let current_state = {
-                                let old_potential_reduction =
-                                    new_seed.as_potential_reduction().expect(
-                                        "RequestNextReduction's interesting test case must \
-                                         hail from a potential reduction",
+                                let old_candidate =
+                                    new_seed.as_candidate().expect(
+                                        "RequestNextCandidate's interesting test case must \
+                                         hail from a candidate",
                                     );
                                 let (old_seed, old_state) = active_states
-                                    .remove(old_potential_reduction)
-                                    .expect("RequestNextReduction with an unknown RequestId");
+                                    .remove(old_candidate)
+                                    .expect("RequestNextCandidate with an unknown RequestId");
                                 self.reducer.next_state_on_interesting(
                                     &new_seed,
                                     &old_seed,
@@ -250,25 +249,25 @@ impl ReducerActor {
                     match result {
                         Err(e) => {
                             // Log the error and tell the supervisor we are out
-                            // of reductions until the next seed test case.
+                            // of candidates until the next seed test case.
                             current_state = None;
                             self.logger.reducer_errored(self.me.id, e);
                             self.supervisor
-                                .no_more_reductions(self.me.clone(), seed.clone());
+                                .no_more_candidates(self.me.clone(), seed.clone());
                         }
                         Ok(None) => {
                             current_state = None;
                             self.exhuasted(seed.clone());
                         }
-                        Ok(Some(reduction)) => {
+                        Ok(Some(candidate)) => {
                             let cloned_state = self.reducer.clone_state(&state);
-                            active_states.insert(reduction.clone(), (seed.clone(), cloned_state));
+                            active_states.insert(candidate.clone(), (seed.clone(), cloned_state));
                             current_state = Some(state);
 
                             self.logger
-                                .finish_generating_next_reduction(self.me.id, reduction.clone());
+                                .finish_generating_next_candidate(self.me.id, candidate.clone());
                             self.supervisor
-                                .reply_next_reduction(self.me.clone(), reduction);
+                                .reply_next_candidate(self.me.clone(), candidate);
                         }
                     }
                 }
@@ -279,7 +278,7 @@ impl ReducerActor {
     }
 
     fn exhuasted(&self, seed: test_case::Interesting) {
-        self.logger.no_more_reductions(self.me.id);
-        self.supervisor.no_more_reductions(self.me.clone(), seed);
+        self.logger.no_more_candidates(self.me.id);
+        self.supervisor.no_more_candidates(self.me.clone(), seed);
     }
 }

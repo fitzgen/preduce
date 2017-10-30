@@ -40,19 +40,19 @@ use std::mem;
 use std::path;
 
 /// A builder to configure a `preduce` run's options, and finally start the
-/// reduction process.
+/// candidate process.
 ///
 /// ```
 /// # fn _ignore() -> preduce::error::Result<()> {
 /// let predicate = preduce::interesting::Script::new("is_interesting.sh")?;
-/// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
+/// let reducer = preduce::reducers::Script::new("generate_candidates.sh")?;
 /// let test_case = "path/to/test-case";
 ///
 /// // Construct the `Options` builder.
 /// preduce::Options::new(predicate, vec![Box::new(reducer)], test_case)
 ///     // Then configure and tweak various options.
 ///     .workers(12)
-///     // Finally, kick off the reduction process.
+///     // Finally, kick off the candidate process.
 ///     .run()?;
 /// # Ok(())
 /// # }
@@ -69,14 +69,14 @@ where
     print_histograms: bool,
 }
 
-/// APIs for configuring options and spawning the reduction process.
+/// APIs for configuring options and spawning the candidate process.
 impl<I> Options<I>
 where
     I: 'static + traits::IsInteresting,
 {
     /// Construct a new `Options` builder.
     ///
-    /// You must provide the is-interesting predicate, the test case reduction
+    /// You must provide the is-interesting predicate, the test case candidate
     /// generators, and the initial test case.
     ///
     /// ### Panics
@@ -88,7 +88,7 @@ where
     /// ```
     /// # fn _ignore() -> preduce::error::Result<()> {
     /// let predicate = preduce::interesting::Script::new("is_interesting.sh")?;
-    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
+    /// let reducer = preduce::reducers::Script::new("generate_candidates.sh")?;
     ///
     /// let opts = preduce::Options::new(predicate, vec![Box::new(reducer)], "path/to/test-case");
     /// # let _ = opts;
@@ -113,13 +113,13 @@ where
         }
     }
 
-    /// Specify how many workers should be testing reductions of the initial
+    /// Specify how many workers should be testing candidates of the initial
     /// test case for interesting-ness in parallel.
     ///
     /// ```
     /// # fn _ignore() -> preduce::error::Result<()> {
     /// let predicate = preduce::interesting::Script::new("is_interesting.sh")?;
-    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
+    /// let reducer = preduce::reducers::Script::new("generate_candidates.sh")?;
     /// let test_case = "path/to/test-case";
     ///
     /// let opts = preduce::Options::new(predicate, vec![Box::new(reducer)], test_case)
@@ -140,7 +140,7 @@ where
         self
     }
 
-    /// Whether we should print various histograms when we finish the reduction
+    /// Whether we should print various histograms when we finish the candidate
     /// process.
     ///
     /// This is generally only useful for people hacking on `preduce`, or those
@@ -150,13 +150,13 @@ where
         self
     }
 
-    /// Finish configuration and run the test case reduction process to
+    /// Finish configuration and run the test case candidate process to
     /// completion.
     ///
     /// ```
     /// # fn _ignore() -> preduce::error::Result<()> {
     /// let predicate = preduce::interesting::Script::new("is_interesting.sh")?;
-    /// let reducer = preduce::reducers::Script::new("generate_reductions.sh")?;
+    /// let reducer = preduce::reducers::Script::new("generate_candidates.sh")?;
     /// let test_case = "path/to/test-case";
     ///
     /// preduce::Options::new(predicate, vec![Box::new(reducer)], test_case).run()?;

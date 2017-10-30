@@ -15,7 +15,7 @@ use std::path::PathBuf;
 /// removing.
 ///
 /// After defining this trait for your type `MyRanges`, you can run a reducer
-/// script that generates potential reductions with those ranges removed from
+/// script that generates candidates with those ranges removed from
 /// the seed test case with `run_ranges::<MyRanges>()`. The resulting reducer
 /// script will try removing all of the given ranges at once, then half of the
 /// ranges at a time, then each quarter at a time, eighth at a time, ..., and

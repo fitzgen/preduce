@@ -1,4 +1,4 @@
-//! Types related to test cases, their interestingness, and potential reductions
+//! Types related to test cases, their interestingness, and candidates
 //! of them.
 
 use either::{Either, Left, Right};
@@ -49,7 +49,7 @@ impl Eq for TempFileInner {}
 
 /// An immutable, temporary file within a temporary directory.
 ///
-/// When generating reductions, we use these immutable, persistent, temporary
+/// When generating candidates, we use these immutable, persistent, temporary
 /// files, that are automatically cleaned up once they're no longer in use.
 ///
 /// These temporary files and directories are atomically reference counted.
@@ -105,9 +105,9 @@ impl TempFile {
     }
 }
 
-impl From<PotentialReduction> for TempFile {
-    fn from(reduction: PotentialReduction) -> TempFile {
-        reduction.test_case
+impl From<Candidate> for TempFile {
+    fn from(candidate: Candidate) -> TempFile {
+        candidate.test_case
     }
 }
 
@@ -121,7 +121,7 @@ impl From<InterestingKind> for TempFile {
     fn from(kind: InterestingKind) -> TempFile {
         match kind {
             InterestingKind::Initial(i) => i.into(),
-            InterestingKind::Reduction(r) => r.into(),
+            InterestingKind::Candidate(r) => r.into(),
         }
     }
 }
@@ -135,8 +135,8 @@ impl From<InitialInteresting> for TempFile {
 /// A test case with potential: it may or may not be smaller than our smallest
 /// interesting test case, and it may or may not be interesting.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PotentialReduction {
-    /// From which reducer did this potential reduction came from?
+pub struct Candidate {
+    /// From which reducer did this candidate come from?
     provenance: String,
 
     /// The temporary file containing the reduced test case.
@@ -149,13 +149,13 @@ pub struct PotentialReduction {
     delta: u64,
 }
 
-impl hash::Hash for PotentialReduction {
+impl hash::Hash for Candidate {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.path().hash(state);
     }
 }
 
-impl TestCaseMethods for PotentialReduction {
+impl TestCaseMethods for Candidate {
     fn path(&self) -> &path::Path {
         &self.test_case.path()
     }
@@ -173,22 +173,22 @@ impl TestCaseMethods for PotentialReduction {
     }
 }
 
-impl PotentialReduction {
-    /// Construct a new potential reduction.
+impl Candidate {
+    /// Construct a new candidate.
     ///
     /// The `seed` must be the interesting test case from which a reducer
-    /// produced this potential reduction.
+    /// produced this candidate.
     ///
     /// The `provenance` must be a diagnostic describing the reducer that
-    /// produced this potential reduction.
+    /// produced this candidate.
     ///
-    /// The `test_case` must be the file path of the potential reduction's test
+    /// The `test_case` must be the file path of the candidate's test
     /// case.
     pub fn new<S, T>(
         seed: Interesting,
         provenance: S,
         test_case: T,
-    ) -> error::Result<PotentialReduction>
+    ) -> error::Result<Candidate>
     where
         S: Into<String>,
         T: Into<TempFile>,
@@ -199,7 +199,7 @@ impl PotentialReduction {
         let test_case = test_case.into();
         let size = fs::metadata(test_case.path())?.len();
 
-        Ok(PotentialReduction {
+        Ok(Candidate {
             provenance: provenance,
             test_case: test_case,
             size: size,
@@ -207,13 +207,13 @@ impl PotentialReduction {
         })
     }
 
-    /// Try and convert this *potential* reduction into an *interesting* test
-    /// case by validating whether it is interesting or not using the given
-    /// `judge`.
+    /// Try and convert this *potentially interesting* candidate into a *known
+    /// interesting* test case by validating whether it is interesting or not
+    /// using the given `judge`.
     pub fn into_interesting<I>(
         self,
         judge: &I,
-    ) -> error::Result<Either<Interesting, PotentialReduction>>
+    ) -> error::Result<Either<Interesting, Candidate>>
     where
         I: ?Sized + traits::IsInteresting,
     {
@@ -224,7 +224,7 @@ impl PotentialReduction {
         }
 
         Ok(Left(Interesting {
-            kind: InterestingKind::Reduction(self),
+            kind: InterestingKind::Candidate(self),
         }))
     }
 }
@@ -294,12 +294,12 @@ impl Interesting {
         }))
     }
 
-    /// If this interesting test case was created from a reduction, rather than
-    /// the initial interesting test case, coerce it to a `PotentialReduction`.
-    pub fn as_potential_reduction(&self) -> Option<&PotentialReduction> {
+    /// If this interesting test case was created from a candidate, rather than
+    /// the initial interesting test case, coerce it to a `Candidate`.
+    pub fn as_candidate(&self) -> Option<&Candidate> {
         match self.kind {
             InterestingKind::Initial(..) => None,
-            InterestingKind::Reduction(ref r) => Some(r),
+            InterestingKind::Candidate(ref r) => Some(r),
         }
     }
 }
@@ -310,9 +310,9 @@ enum InterestingKind {
     /// The initial interesting test case.
     Initial(InitialInteresting),
 
-    /// A potential reduction of the initial test case that has been found to be
+    /// A candidate of the initial test case that has been found to be
     /// interesting.
-    Reduction(PotentialReduction),
+    Candidate(Candidate),
 }
 
 impl hash::Hash for InterestingKind {
@@ -325,28 +325,28 @@ impl TestCaseMethods for InterestingKind {
     fn path(&self) -> &path::Path {
         match *self {
             InterestingKind::Initial(ref initial) => initial.path(),
-            InterestingKind::Reduction(ref reduction) => reduction.path(),
+            InterestingKind::Candidate(ref candidate) => candidate.path(),
         }
     }
 
     fn size(&self) -> u64 {
         match *self {
             InterestingKind::Initial(ref initial) => initial.size(),
-            InterestingKind::Reduction(ref reduction) => reduction.size(),
+            InterestingKind::Candidate(ref candidate) => candidate.size(),
         }
     }
 
     fn delta(&self) -> u64 {
         match *self {
             InterestingKind::Initial(ref initial) => initial.delta(),
-            InterestingKind::Reduction(ref reduction) => reduction.delta(),
+            InterestingKind::Candidate(ref candidate) => candidate.delta(),
         }
     }
 
     fn provenance(&self) -> &str {
         match *self {
             InterestingKind::Initial(ref i) => i.provenance(),
-            InterestingKind::Reduction(ref r) => r.provenance(),
+            InterestingKind::Candidate(ref r) => r.provenance(),
         }
     }
 }
@@ -387,10 +387,10 @@ impl TestCaseMethods for InitialInteresting {
 }
 
 #[cfg(test)]
-impl PotentialReduction {
-    pub fn testing_only_new() -> PotentialReduction {
-        PotentialReduction {
-            provenance: "PotentialReduction::testing_only_new".into(),
+impl Candidate {
+    pub fn testing_only_new() -> Candidate {
+        Candidate {
+            provenance: "Candidate::testing_only_new".into(),
             test_case: TempFile::anonymous().unwrap(),
             size: 0,
             delta: 0,
@@ -509,42 +509,42 @@ mod tests {
             .expect("interesting should be ok")
             .expect("interesting should be some");
 
-        let reduction = PotentialReduction::testing_only_new();
+        let candidate = Candidate::testing_only_new();
         {
-            let mut reduction_file = fs::File::create(reduction.path()).unwrap();
-            writeln!(&mut reduction_file, "la").unwrap();
+            let mut candidate_file = fs::File::create(candidate.path()).unwrap();
+            writeln!(&mut candidate_file, "la").unwrap();
         }
 
-        let reduction = PotentialReduction::new(interesting, "test", reduction)
-            .expect("should create potenetial reduction");
+        let candidate = Candidate::new(interesting, "test", candidate)
+            .expect("should create potenetial candidate");
 
-        let interesting_reduction = reduction
+        let interesting_candidate = candidate
             .clone()
             .into_interesting(&judge)
-            .expect("interesting reduction should be ok")
+            .expect("interesting candidate should be ok")
             .left()
-            .expect("interesting reduction should be some");
+            .expect("interesting candidate should be some");
 
         assert_eq!(
-            interesting_reduction.path(),
-            reduction.path(),
-            "The interesting reduction's path should be the same as the potential reduction's path"
+            interesting_candidate.path(),
+            candidate.path(),
+            "The interesting candidate's path should be the same as the candidate's path"
         );
 
         assert!(
-            interesting_reduction.path().is_file(),
-            "The interesting reduction's path should have a file"
+            interesting_candidate.path().is_file(),
+            "The interesting candidate's path should have a file"
         );
 
-        let mut file = fs::File::open(&interesting_reduction.path())
-            .expect("The interesting reduction path should have a file");
+        let mut file = fs::File::open(&interesting_candidate.path())
+            .expect("The interesting candidate path should have a file");
         let mut contents = String::new();
         file.read_to_string(&mut contents)
             .expect("And we should read from that file");
         assert_eq!(contents, "la\n", "And it should have the expected contents");
 
         assert_eq!(
-            interesting_reduction.size(),
+            interesting_candidate.size(),
             contents.len() as u64,
             "And the test case should have the expected size"
         );

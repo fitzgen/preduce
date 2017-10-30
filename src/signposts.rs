@@ -31,8 +31,8 @@ define_signpost!(100, SupervisorHandleInteresting);
 define_signpost!(101, SupervisorShutdown);
 define_signpost!(102, SupervisorRunLoop);
 
-define_signpost!(200, WorkerGetNextReduction);
+define_signpost!(200, WorkerGetNextCandidate);
 define_signpost!(201, WorkerJudgeInteresting);
 define_signpost!(202, WorkerReportInteresting);
 
-define_signpost!(300, ReducerNextReduction);
+define_signpost!(300, ReducerNextCandidate);

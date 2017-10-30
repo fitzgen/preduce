@@ -157,11 +157,11 @@ pub trait Reducer: for<'de> Deserialize<'de> + Serialize {
     /// Construct a new reducer for the given seed test case.
     fn new(seed: PathBuf) -> Result<Self, Self::Error>;
 
-    /// Advance to the next reduction state, assuming that the potential
-    /// reduction generated from the current `self` was not interesting.
+    /// Advance to the next candidate state, assuming that the candidate
+    /// generated from the current `self` was not interesting.
     fn next(self, seed: PathBuf) -> Result<Option<Self>, Self::Error>;
 
-    /// Advance to the next reduction state, given that the reduction generated
+    /// Advance to the next candidate state, given that the candidate generated
     /// from the current `self` was judged to be interesting.
     fn next_on_interesting(
         self,
@@ -169,7 +169,7 @@ pub trait Reducer: for<'de> Deserialize<'de> + Serialize {
         new_seed: PathBuf,
     ) -> Result<Option<Self>, Self::Error>;
 
-    /// Skip over the next `n` reduction states.
+    /// Skip over the next `n` candidate states.
     ///
     /// By default, this is implemented by calling `self.next()` in a loop `n`
     /// times. This default implementation is `O(n)`, so if your reducer can
@@ -186,15 +186,15 @@ pub trait Reducer: for<'de> Deserialize<'de> + Serialize {
         Ok(Some(s))
     }
 
-    /// Generate a reduction into a file at the destination path `dest`.
+    /// Generate a candidate into a file at the destination path `dest`.
     ///
     /// Although it is not a reducer's responsibility to name paths, it *is* the
     /// reducer's responsibility to create the file at the given `dest` path.
     ///
-    /// If the reduction state in `self` can't be used to generate a reduction
+    /// If the candidate state in `self` can't be used to generate a candidate
     /// for whatever reason, maybe it is easier to check in `reduce` than `next`
     /// for your reducer, then return `Ok(false)`. Upon successfully generating
-    /// a reduction, return `Ok(true)`.
+    /// a candidate, return `Ok(true)`.
     fn reduce(self, seed: PathBuf, dest: PathBuf) -> Result<bool, Self::Error>;
 }
 

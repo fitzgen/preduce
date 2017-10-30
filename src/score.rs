@@ -1,9 +1,9 @@
-//! Types for potential reductions' priority.
+//! Types for candidates' priority.
 
 use std::cmp;
 
-/// A score of a reduction's potential. Higher is better: more likely to be
-/// judged interesting and a bigger reduction.
+/// A score of a candidate's potential. Higher is better: more likely to be
+/// judged interesting and a bigger candidate.
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
 pub struct Score(f64);
 

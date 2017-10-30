@@ -93,8 +93,8 @@ pub struct FastForwardRequest {
     pub state: serde_json::Value,
 }
 
-/// Create a reduction of the given known-interesting seed test case at the
-/// given destination path and with the given reduction state.
+/// Create a candidate of the given known-interesting seed test case at the
+/// given destination path and with the given candidate state.
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct ReduceRequest {
     /// The known-interesting seed test case that the given state was created
@@ -102,7 +102,7 @@ pub struct ReduceRequest {
     pub seed: PathBuf,
     /// The current state.
     pub state: serde_json::Value,
-    /// The path where the reduction should be created at.
+    /// The path where the candidate should be created at.
     pub dest: PathBuf,
 }
 
@@ -125,28 +125,28 @@ pub enum Response {
     Reduce(ReduceResponse),
 }
 
-/// A response to `Request::New` with the new reduction state.
+/// A response to `Request::New` with the new candidate state.
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct NewResponse {
     /// The new state.
     pub state: serde_json::Value,
 }
 
-/// A response to `Request::Next` with the next reduction state.
+/// A response to `Request::Next` with the next candidate state.
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct NextResponse {
     /// The next state.
     pub next_state: Option<serde_json::Value>,
 }
 
-/// A response to `Request::NextOnInteresting` with the next reduction state.
+/// A response to `Request::NextOnInteresting` with the next candidate state.
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct NextOnInterestingResponse {
     /// The next state.
     pub next_state: Option<serde_json::Value>,
 }
 
-/// A response to `Request::FastForward` with the next reduction state.
+/// A response to `Request::FastForward` with the next candidate state.
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct FastForwardResponse {
     /// The next state.
@@ -155,11 +155,11 @@ pub struct FastForwardResponse {
 
 /// A response to `Request::Reduce`.
 ///
-/// If the reduction was generated into the requested destination path, then
+/// If the candidate was generated into the requested destination path, then
 /// `reduced` is `true`. If not, then `reduced` is `false`.
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct ReduceResponse {
-    /// Whether a potential reduction was created at the request's destination
+    /// Whether a candidate was created at the request's destination
     /// path.
     pub reduced: bool,
 }
