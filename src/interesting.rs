@@ -120,10 +120,7 @@ impl IsInteresting for Script {
             .stderr(process::Stdio::null())
             .stdin(process::Stdio::null());
 
-        match (
-            candidate.parent(),
-            candidate.file_name(),
-        ) {
+        match (candidate.parent(), candidate.file_name()) {
             (Some(dir), Some(file)) => {
                 cmd.current_dir(dir).arg(file);
             }
@@ -193,10 +190,7 @@ where
     U: IsInteresting,
 {
     fn is_interesting(&self, candidate: &path::Path) -> error::Result<bool> {
-        Ok(
-            self.first.is_interesting(candidate)?
-                && self.second.is_interesting(candidate)?,
-        )
+        Ok(self.first.is_interesting(candidate)? && self.second.is_interesting(candidate)?)
     }
 
     fn clone(&self) -> Box<IsInteresting>
@@ -256,10 +250,7 @@ where
     U: IsInteresting,
 {
     fn is_interesting(&self, candidate: &path::Path) -> error::Result<bool> {
-        Ok(
-            self.first.is_interesting(candidate)?
-                || self.second.is_interesting(candidate)?,
-        )
+        Ok(self.first.is_interesting(candidate)? || self.second.is_interesting(candidate)?)
     }
 
     fn clone(&self) -> Box<IsInteresting>

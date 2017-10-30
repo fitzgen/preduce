@@ -199,11 +199,7 @@ impl Logger {
 
     /// Log that the worker with the given id has started running an
     /// is-interesting predicate on its test case.
-    pub fn start_judging_interesting(
-        &self,
-        id: WorkerId,
-        candidate: test_case::Candidate,
-    ) {
+    pub fn start_judging_interesting(&self, id: WorkerId, candidate: test_case::Candidate) {
         let _ = self.sender
             .send(LoggerMessage::StartJudgingInteresting(id, candidate));
     }
@@ -246,11 +242,7 @@ impl Logger {
     }
 
     /// Log that this reducer actor has completed generating its next candidate.
-    pub fn finish_generating_next_candidate(
-        &self,
-        id: ReducerId,
-        candidate: test_case::Candidate,
-    ) {
+    pub fn finish_generating_next_candidate(&self, id: ReducerId, candidate: test_case::Candidate) {
         let _ = self.sender
             .send(LoggerMessage::FinishGeneratingNextCandidate(id, candidate));
     }

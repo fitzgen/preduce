@@ -254,11 +254,7 @@ impl Candidate {
     ///
     /// The `test_case` must be the file path of the candidate's test
     /// case.
-    pub fn new<S, T>(
-        seed: Interesting,
-        provenance: S,
-        test_case: T,
-    ) -> error::Result<Candidate>
+    pub fn new<S, T>(seed: Interesting, provenance: S, test_case: T) -> error::Result<Candidate>
     where
         S: Into<String>,
         T: Into<TempFile>,
@@ -305,10 +301,7 @@ impl Candidate {
     /// Try and convert this *potentially interesting* candidate into a *known
     /// interesting* test case by validating whether it is interesting or not
     /// using the given `judge`.
-    pub fn into_interesting<I>(
-        self,
-        judge: &I,
-    ) -> error::Result<Either<Interesting, Candidate>>
+    pub fn into_interesting<I>(self, judge: &I) -> error::Result<Either<Interesting, Candidate>>
     where
         I: ?Sized + traits::IsInteresting,
     {

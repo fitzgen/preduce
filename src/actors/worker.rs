@@ -211,10 +211,7 @@ impl WorkerActor {
         None
     }
 
-    fn get_next_candidate(
-        self,
-        not_interesting: Option<test_case::Candidate>,
-    ) -> Option<Test> {
+    fn get_next_candidate(self, not_interesting: Option<test_case::Candidate>) -> Option<Test> {
         let _signpost = signposts::WorkerGetNextCandidate::new();
 
         self.supervisor
@@ -230,9 +227,7 @@ impl WorkerActor {
 }
 
 impl Test {
-    fn judge(
-        self,
-    ) -> error::Result<Either<Interesting, (WorkerActor, test_case::Candidate)>> {
+    fn judge(self) -> error::Result<Either<Interesting, (WorkerActor, test_case::Candidate)>> {
         let _signpost = signposts::WorkerJudgeInteresting::new();
 
         self.worker

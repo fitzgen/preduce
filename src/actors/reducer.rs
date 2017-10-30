@@ -179,7 +179,7 @@ impl ReducerActor {
                             current_state = self.reducer.next_state_on_interesting(
                                 &new_seed,
                                 &old_seed,
-                                &old_state
+                                &old_state,
                             )?;
                         }
                     }
@@ -217,11 +217,10 @@ impl ReducerActor {
                         None => self.reducer.next_state(&seed, &state)?,
                         Some(new_seed) => {
                             let current_state = {
-                                let old_candidate =
-                                    new_seed.as_candidate().expect(
-                                        "RequestNextCandidate's interesting test case must \
-                                         hail from a candidate",
-                                    );
+                                let old_candidate = new_seed.as_candidate().expect(
+                                    "RequestNextCandidate's interesting test case must \
+                                     hail from a candidate",
+                                );
                                 let (old_seed, old_state) = active_states
                                     .remove(old_candidate)
                                     .expect("RequestNextCandidate with an unknown RequestId");
