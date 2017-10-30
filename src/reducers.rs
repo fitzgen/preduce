@@ -1,7 +1,5 @@
 //! Concrete implementations of `preduce::traits::Reducer`.
 
-extern crate rand;
-
 use error;
 use is_executable::IsExecutable;
 use preduce_ipc_types::{FastForwardRequest, NewRequest, NextOnInterestingRequest, NextRequest,
@@ -119,6 +117,7 @@ pub struct Script {
     out_dir: Option<Arc<tempdir::TempDir>>,
     counter: usize,
     child: Option<process::Child>,
+    child_stdin: Option<io::BufWriter<process::ChildStdin>>,
     child_stdout: Option<io::BufReader<process::ChildStdout>>,
     strict: bool,
 }
@@ -144,6 +143,7 @@ impl Script {
             out_dir: None,
             counter: 0,
             child: None,
+            child_stdin: None,
             child_stdout: None,
             strict: false,
         })
@@ -160,6 +160,7 @@ impl Script {
     fn spawn_child(&mut self) -> error::Result<()> {
         assert!(self.out_dir.is_none());
         assert!(self.child.is_none());
+        assert!(self.child_stdin.is_none());
         assert!(self.child_stdout.is_none());
 
         self.out_dir = Some(Arc::new(tempdir::TempDir::new("preduce-reducer-script")?));
@@ -170,8 +171,13 @@ impl Script {
             .stdout(process::Stdio::piped());
 
         let mut child = cmd.spawn()?;
+
+        let stdin = child.stdin.take().unwrap();
+        self.child_stdin = Some(io::BufWriter::with_capacity(1024 * 256, stdin));
+
         let stdout = child.stdout.take().unwrap();
         self.child_stdout = Some(io::BufReader::new(stdout));
+
         self.child = Some(child);
 
         Ok(())
@@ -184,10 +190,12 @@ impl Script {
         if let Some(mut child) = self.child.take() {
             if (|| -> error::Result<()> {
                 {
-                    let mut child_stdin = child.stdin.as_mut().unwrap();
+                    let mut child_stdin = self.child_stdin.as_mut().unwrap();
                     serde_json::to_writer(&mut child_stdin, &Request::Shutdown)?;
                     writeln!(&mut child_stdin)?;
+                    child_stdin.flush()?;
                 }
+                self.child_stdin = None;
                 child.wait()?;
                 Ok(())
             })()
@@ -201,6 +209,7 @@ impl Script {
     }
 
     fn kill_child(&mut self) {
+        self.child_stdin = None;
         if let Some(mut child) = self.child.take() {
             let _ = child.kill();
             let _ = child.wait();
@@ -232,14 +241,15 @@ impl Script {
         assert!(self.child_stdout.is_some());
 
         match (|| {
-            let child = self.child.as_mut().unwrap();
-            let mut stdin = child.stdin.as_mut().unwrap();
+            let mut stdin = self.child_stdin.as_mut().unwrap();
             serde_json::to_writer(&mut stdin, &request)?;
-            writeln!(&mut stdin)?;
+            write!(&mut stdin, "\n")?;
+            stdin.flush()?;
 
             let stdout = self.child_stdout.as_mut().unwrap();
             let mut line = String::new();
             stdout.read_line(&mut line)?;
+
             let response: Response = serde_json::from_str(&line)?;
             Ok(response)
         })()
@@ -273,6 +283,7 @@ impl Reducer for Script {
             out_dir: None,
             counter: 0,
             child: None,
+            child_stdin: None,
             child_stdout: None,
             strict: self.strict,
         })

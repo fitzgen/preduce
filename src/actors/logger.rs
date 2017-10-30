@@ -6,7 +6,7 @@ use histo::Histogram;
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path;
 use std::sync::mpsc;
 use std::thread;
@@ -305,10 +305,11 @@ fn sum(h: &Histogram) -> u64 {
 
 /// Logger actor implementation.
 impl Logger {
-    fn run<W>(mut to: W, incoming: mpsc::Receiver<LoggerMessage>, should_print_histograms: bool)
+    fn run<W>(to: W, incoming: mpsc::Receiver<LoggerMessage>, should_print_histograms: bool)
     where
         W: Write,
     {
+        let mut to = io::BufWriter::new(to);
         let mut smallest_size = 0;
 
         // Reduction provenance -> (new smallest interesting,
@@ -331,6 +332,7 @@ impl Logger {
 
         for log_msg in incoming {
             writeln!(&mut to, "{}", log_msg).expect("Should write to log file");
+            to.flush().expect("Should flush log file");
 
             match log_msg {
                 msg @ LoggerMessage::ReducerErrored(..) |
