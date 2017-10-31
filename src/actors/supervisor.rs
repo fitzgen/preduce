@@ -238,7 +238,7 @@ where
             )?;
 
             if !should_continue || smallest_interesting.size() >= last_iter_size {
-                return supervisor.shutdown(smallest_interesting, orig_size);
+                return supervisor.shutdown(smallest_interesting, orig_size, !should_continue);
             }
         }
     }
@@ -422,10 +422,13 @@ where
         self,
         smallest_interesting: test_case::Interesting,
         orig_size: u64,
+        shutting_down_early: bool
     ) -> error::Result<()> {
         assert!(self.workers.is_empty());
         assert!(self.candidate_queue.is_empty());
-        assert_eq!(self.exhausted_reducers.len(), self.reducer_actors.len());
+        if !shutting_down_early {
+            assert_eq!(self.exhausted_reducers.len(), self.reducer_actors.len());
+        }
 
         let _signpost = signposts::SupervisorShutdown::new();
 
