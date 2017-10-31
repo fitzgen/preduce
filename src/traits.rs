@@ -8,16 +8,16 @@ use std::fmt;
 use std::path;
 use test_case;
 
-/// A reducer generates potentially-interesting reductions from a
+/// A reducer generates potentially-interesting candidates from a
 /// known-interesting initial seed test case.
 ///
-/// Reducers should produce potentially-interesting reductions that are smaller
+/// Reducers should produce potentially-interesting candidates that are smaller
 /// in size than the given known-interesting seed.
 ///
-/// Reducers should produce reductions that are, generally speaking, likely to
+/// Reducers should produce candidates that are, generally speaking, likely to
 /// be found interesting.
 ///
-/// Example reduction strategies that might be implemented as different
+/// Example candidate strategies that might be implemented as different
 /// reducers:
 ///
 /// * Removing individual lines from the seed
@@ -33,8 +33,8 @@ use test_case;
 ///
 /// ### `Box<Any + Send>` State
 ///
-/// `preduce` tests many reductions for interesting-ness concurrently, even
-/// reductions generated from the same reducer. Therefore, when a reduction is
+/// `preduce` tests many candidates for interesting-ness concurrently, even
+/// candidates generated from the same reducer. Therefore, when a candidate is
 /// found to be interesting, and we want to search go down that rabbit hole, we
 /// need to know *which* rabbit hole to go down. This *which* is what the
 /// `Box<Any + Send>` state represents. It can also be used to cache the results
@@ -49,10 +49,10 @@ use test_case;
 /// state.
 ///
 /// If a reducer can't efficiently continue a traversal when we find that a
-/// reduction was interesting and wish to pick up where we previously left off,
+/// candidate was interesting and wish to pick up where we previously left off,
 /// then it can opt to redirect calls to `next_state_on_interesting` to
 /// `new_state`. This has the downside of iterating over the same first N
-/// reductions that are likely still not interesting.
+/// candidates that are likely still not interesting.
 ///
 /// How might this state threading be used? Consider implementing a reducer that
 /// removes a single line at a time from the seed test case, in order from top
@@ -67,7 +67,7 @@ use test_case;
 ///
 /// * Every time `next_state` is called, we advance the index. When the index is
 /// greater than or equal to the number of lines in the seed test case, we've
-/// exhausted all reductions. There are no more lines to try removing.
+/// exhausted all candidates. There are no more lines to try removing.
 ///
 /// * When `next_state_on_interesting` is called, we know that the new seed test
 /// case is the same as the old seed that our state was created with, sans the
@@ -155,7 +155,7 @@ use test_case;
 ///         &mut self,
 ///         seed: &test_case::Interesting,
 ///         state: &Box<Any + Send>
-///     ) -> Result<Option<test_case::PotentialReduction>> {
+///     ) -> Result<Option<test_case::Candidate>> {
 ///         let (index, num_lines) = Self::downcast(state);
 ///
 ///         if index >= num_lines {
@@ -163,8 +163,8 @@ use test_case;
 ///         }
 ///
 /// #       let remove_nth_line = |_, _| -> Result<_> { unimplemented!() };
-///         let reduction = remove_nth_line(index, seed)?;
-///         Ok(Some(reduction))
+///         let candidate = remove_nth_line(index, seed)?;
+///         Ok(Some(candidate))
 ///     }
 ///
 ///     // If `preduce` would like to skip further ahead, we can do it more
@@ -198,16 +198,16 @@ pub trait Reducer: fmt::Debug + Send {
 
     /// Advance to the next state.
     ///
-    /// We don't know if the reduction produced with the given `prev_state` was
-    /// interesting or not. `preduce` tests many reductions in parallel, even
-    /// reductions generated from the same reducer, so we might still be testing
-    /// the reduction produced with the last state. Or, we might even have a
+    /// We don't know if the candidate produced with the given `prev_state` was
+    /// interesting or not. `preduce` tests many candidates in parallel, even
+    /// candidates generated from the same reducer, so we might still be testing
+    /// the candidate produced with the last state. Or, we might even have a
     /// heuristic that decided we should skip over the last state.
     ///
     /// For example, a reducer that is removing lines one at a time from a file
     /// would increment its current index state.
     ///
-    /// If the reducer has exhausted all reductions, and there is no next state,
+    /// If the reducer has exhausted all candidates, and there is no next state,
     /// then it should return `None`.
     fn next_state(
         &mut self,
@@ -221,7 +221,7 @@ pub trait Reducer: fmt::Debug + Send {
     /// The previous state was used to generate `new_seed` from `old_seed`,
     /// which has been found interesting. Given that information, advance the
     /// `prev_state` to some new state. If the reducer has exhausted all
-    /// reductions, and there is no next state, then it should return `None`.
+    /// candidates, and there is no next state, then it should return `None`.
     ///
     /// For example, a reducer that is removing lines one at a time from a file
     /// would not need to increment its index state in
@@ -268,31 +268,31 @@ pub trait Reducer: fmt::Debug + Send {
         Ok(Some(state))
     }
 
-    /// Generate a potentially-interesting reduction of the given
+    /// Generate a potentially-interesting candidate of the given
     /// known-interesting seed test case with the given state.
     ///
-    /// If the reducer has exhausted all of its reductions, then it should
+    /// If the reducer has exhausted all of its candidates, then it should
     /// return `None`.
     fn reduce(
         &mut self,
         seed: &test_case::Interesting,
         state: &Box<Any + Send>,
-    ) -> error::Result<Option<test_case::PotentialReduction>>;
+    ) -> error::Result<Option<test_case::Candidate>>;
 }
 
-/// Is a potential reduction interesting?
+/// Is a candidate interesting?
 ///
-/// If a potential reduction is not interesting, then it will be abandoned,
-/// along with further potential reductions of it.
+/// If a candidate is not interesting, then it will be abandoned,
+/// along with further candidates of it.
 ///
-/// If a potential reduction is interesting, then it is a candidate for the
+/// If a candidate is interesting, then it is a candidate for the
 /// current most-reduced test case.
 ///
 /// An is-interesting test should be deterministic and idempotent.
 pub trait IsInteresting: Send {
     /// Return `true` if the reduced test case is interesting, `false`
     /// otherwise.
-    fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool>;
+    fn is_interesting(&self, candidate: &path::Path) -> error::Result<bool>;
 
     /// Clone this `IsInteresting` predicate as an owned trait object.
     fn clone(&self) -> Box<IsInteresting>
@@ -300,8 +300,8 @@ pub trait IsInteresting: Send {
         Self: 'static;
 }
 
-/// An oracle observes the results of interesting-ness judgements of reductions
-/// and then predicts the interesting-ness of future reductions by scoring
+/// An oracle observes the results of interesting-ness judgements of candidates
+/// and then predicts the interesting-ness of future candidates by scoring
 /// them. The resulting scores are ultimately used by the supervisor actor to
 /// prioritize and schedule work.
 pub trait Oracle: Send {
@@ -312,15 +312,15 @@ pub trait Oracle: Send {
     /// is not the smallest.
     fn observe_not_smallest_interesting(&mut self, interesting: &test_case::Interesting);
 
-    /// Tell the oracle that we found the given reduction unininteresting.
-    fn observe_not_interesting(&mut self, reduction: &test_case::PotentialReduction);
+    /// Tell the oracle that we found the given candidate unininteresting.
+    fn observe_not_interesting(&mut self, candidate: &test_case::Candidate);
 
     /// Tell the oracle that the reducer with the given name has been exhausted.
     fn observe_exhausted(&mut self, reducer_name: &str);
 
-    /// Ask the oracle's to score the given potential reduction, so we know how
+    /// Ask the oracle's to score the given candidate, so we know how
     /// to prioritize testing it.
-    fn predict(&mut self, reduction: &test_case::PotentialReduction) -> score::Score;
+    fn predict(&mut self, candidate: &test_case::Candidate) -> score::Score;
 }
 
 #[cfg(test)]

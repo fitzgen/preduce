@@ -1,15 +1,45 @@
-//! Types related to test cases, their interestingness, and potential reductions
+//! Types related to test cases, their interestingness, and candidates
 //! of them.
 
+use blake2::{Blake2b, Digest};
 use either::{Either, Left, Right};
 use error;
+use generic_array;
 use std::fs;
 use std::hash;
-use std::io;
+use std::io::{self, Read};
 use std::path;
+use std::process;
 use std::sync::Arc;
 use tempdir;
 use traits;
+use typenum;
+
+/// The result of `Blake2b::digest`.
+///
+/// This is terrible.
+pub type Blake2Hash = generic_array::GenericArray<
+    u8,
+    typenum::uint::UInt<
+        typenum::uint::UInt<
+            typenum::uint::UInt<
+                typenum::uint::UInt<
+                    typenum::uint::UInt<
+                        typenum::uint::UInt<
+                            typenum::uint::UInt<typenum::uint::UTerm, typenum::bit::B1>,
+                            typenum::bit::B0,
+                        >,
+                        typenum::bit::B0,
+                    >,
+                    typenum::bit::B0,
+                >,
+                typenum::bit::B0,
+            >,
+            typenum::bit::B0,
+        >,
+        typenum::bit::B0,
+    >,
+>;
 
 /// Methods common to all test cases.
 pub trait TestCaseMethods: Into<TempFile> + hash::Hash {
@@ -26,6 +56,13 @@ pub trait TestCaseMethods: Into<TempFile> + hash::Hash {
 
     /// Get the provenance of this test case.
     fn provenance(&self) -> &str;
+
+    /// The hash of the full test case contents.
+    fn full_hash(&self) -> Blake2Hash;
+
+    /// The hash of the diff with the seed from which this test case was
+    /// generated, or hash of an empty diff if this is an initial test case.
+    fn diff_hash(&self) -> Blake2Hash;
 }
 
 #[derive(Debug, Clone)]
@@ -49,7 +86,7 @@ impl Eq for TempFileInner {}
 
 /// An immutable, temporary file within a temporary directory.
 ///
-/// When generating reductions, we use these immutable, persistent, temporary
+/// When generating candidates, we use these immutable, persistent, temporary
 /// files, that are automatically cleaned up once they're no longer in use.
 ///
 /// These temporary files and directories are atomically reference counted.
@@ -105,9 +142,9 @@ impl TempFile {
     }
 }
 
-impl From<PotentialReduction> for TempFile {
-    fn from(reduction: PotentialReduction) -> TempFile {
-        reduction.test_case
+impl From<Candidate> for TempFile {
+    fn from(candidate: Candidate) -> TempFile {
+        candidate.test_case
     }
 }
 
@@ -121,7 +158,7 @@ impl From<InterestingKind> for TempFile {
     fn from(kind: InterestingKind) -> TempFile {
         match kind {
             InterestingKind::Initial(i) => i.into(),
-            InterestingKind::Reduction(r) => r.into(),
+            InterestingKind::Candidate(r) => r.into(),
         }
     }
 }
@@ -135,8 +172,8 @@ impl From<InitialInteresting> for TempFile {
 /// A test case with potential: it may or may not be smaller than our smallest
 /// interesting test case, and it may or may not be interesting.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PotentialReduction {
-    /// From which reducer did this potential reduction came from?
+pub struct Candidate {
+    /// From which reducer did this candidate come from?
     provenance: String,
 
     /// The temporary file containing the reduced test case.
@@ -147,15 +184,21 @@ pub struct PotentialReduction {
 
     /// The delta size from the parent test case.
     delta: u64,
+
+    /// The hash of the full contents.
+    full_hash: Blake2Hash,
+
+    /// The hash of the diff with the seed.
+    diff_hash: Blake2Hash,
 }
 
-impl hash::Hash for PotentialReduction {
+impl hash::Hash for Candidate {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.path().hash(state);
     }
 }
 
-impl TestCaseMethods for PotentialReduction {
+impl TestCaseMethods for Candidate {
     fn path(&self) -> &path::Path {
         &self.test_case.path()
     }
@@ -171,24 +214,47 @@ impl TestCaseMethods for PotentialReduction {
     fn provenance(&self) -> &str {
         &self.provenance
     }
+
+    fn full_hash(&self) -> Blake2Hash {
+        self.full_hash
+    }
+
+    fn diff_hash(&self) -> Blake2Hash {
+        self.diff_hash
+    }
 }
 
-impl PotentialReduction {
-    /// Construct a new potential reduction.
+fn hash<R: Read>(mut src: R) -> error::Result<Blake2Hash> {
+    let mut hasher = Blake2b::default();
+    let mut buf = vec![0; 1024 * 1024];
+    loop {
+        let bytes_read = match src.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) => {
+                if e.kind() == io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(e.into());
+            }
+        };
+        hasher.input(&buf[..bytes_read]);
+    }
+    Ok(hasher.result())
+}
+
+impl Candidate {
+    /// Construct a new candidate.
     ///
     /// The `seed` must be the interesting test case from which a reducer
-    /// produced this potential reduction.
+    /// produced this candidate.
     ///
     /// The `provenance` must be a diagnostic describing the reducer that
-    /// produced this potential reduction.
+    /// produced this candidate.
     ///
-    /// The `test_case` must be the file path of the potential reduction's test
+    /// The `test_case` must be the file path of the candidate's test
     /// case.
-    pub fn new<S, T>(
-        seed: Interesting,
-        provenance: S,
-        test_case: T,
-    ) -> error::Result<PotentialReduction>
+    pub fn new<S, T>(seed: Interesting, provenance: S, test_case: T) -> error::Result<Candidate>
     where
         S: Into<String>,
         T: Into<TempFile>,
@@ -197,23 +263,45 @@ impl PotentialReduction {
         assert!(!provenance.is_empty());
 
         let test_case = test_case.into();
-        let size = fs::metadata(test_case.path())?.len();
+        let size;
+        let full_hash;
+        let diff_hash;
+        {
+            let path = test_case.path();
+            size = fs::metadata(&path)?.len();
 
-        Ok(PotentialReduction {
+            let file = fs::File::open(&path)?;
+            full_hash = hash(file)?;
+
+            let diff = process::Command::new("diff")
+                .args(&[
+                    "--unchanged-line-format=''",
+                    "--new-line-format='+%L'",
+                    "--old-line-format='-%L'",
+                    &provenance,
+                    &path.display().to_string(),
+                ])
+                .stdout(process::Stdio::piped())
+                .stderr(process::Stdio::null())
+                .stdin(process::Stdio::null())
+                .output()?
+                .stdout;
+            diff_hash = hash(&diff[..])?;
+        }
+        Ok(Candidate {
             provenance: provenance,
-            test_case: test_case,
+            test_case,
             size: size,
             delta: seed.size().saturating_sub(size),
+            full_hash,
+            diff_hash,
         })
     }
 
-    /// Try and convert this *potential* reduction into an *interesting* test
-    /// case by validating whether it is interesting or not using the given
-    /// `judge`.
-    pub fn into_interesting<I>(
-        self,
-        judge: &I,
-    ) -> error::Result<Either<Interesting, PotentialReduction>>
+    /// Try and convert this *potentially interesting* candidate into a *known
+    /// interesting* test case by validating whether it is interesting or not
+    /// using the given `judge`.
+    pub fn into_interesting<I>(self, judge: &I) -> error::Result<Either<Interesting, Candidate>>
     where
         I: ?Sized + traits::IsInteresting,
     {
@@ -224,7 +312,7 @@ impl PotentialReduction {
         }
 
         Ok(Left(Interesting {
-            kind: InterestingKind::Reduction(self),
+            kind: InterestingKind::Candidate(self),
         }))
     }
 }
@@ -258,6 +346,14 @@ impl TestCaseMethods for Interesting {
     fn provenance(&self) -> &str {
         self.kind.provenance()
     }
+
+    fn full_hash(&self) -> Blake2Hash {
+        self.kind.full_hash()
+    }
+
+    fn diff_hash(&self) -> Blake2Hash {
+        self.kind.diff_hash()
+    }
 }
 
 impl Interesting {
@@ -285,21 +381,23 @@ impl Interesting {
         }
 
         let size = fs::metadata(temp_file.path())?.len();
+        let full_hash = hash(fs::File::open(file_path.as_ref())?)?;
 
         Ok(Some(Interesting {
             kind: InterestingKind::Initial(InitialInteresting {
                 test_case: temp_file,
                 size: size,
+                full_hash,
             }),
         }))
     }
 
-    /// If this interesting test case was created from a reduction, rather than
-    /// the initial interesting test case, coerce it to a `PotentialReduction`.
-    pub fn as_potential_reduction(&self) -> Option<&PotentialReduction> {
+    /// If this interesting test case was created from a candidate, rather than
+    /// the initial interesting test case, coerce it to a `Candidate`.
+    pub fn as_candidate(&self) -> Option<&Candidate> {
         match self.kind {
             InterestingKind::Initial(..) => None,
-            InterestingKind::Reduction(ref r) => Some(r),
+            InterestingKind::Candidate(ref r) => Some(r),
         }
     }
 }
@@ -310,9 +408,9 @@ enum InterestingKind {
     /// The initial interesting test case.
     Initial(InitialInteresting),
 
-    /// A potential reduction of the initial test case that has been found to be
+    /// A candidate of the initial test case that has been found to be
     /// interesting.
-    Reduction(PotentialReduction),
+    Candidate(Candidate),
 }
 
 impl hash::Hash for InterestingKind {
@@ -325,28 +423,42 @@ impl TestCaseMethods for InterestingKind {
     fn path(&self) -> &path::Path {
         match *self {
             InterestingKind::Initial(ref initial) => initial.path(),
-            InterestingKind::Reduction(ref reduction) => reduction.path(),
+            InterestingKind::Candidate(ref candidate) => candidate.path(),
         }
     }
 
     fn size(&self) -> u64 {
         match *self {
             InterestingKind::Initial(ref initial) => initial.size(),
-            InterestingKind::Reduction(ref reduction) => reduction.size(),
+            InterestingKind::Candidate(ref candidate) => candidate.size(),
         }
     }
 
     fn delta(&self) -> u64 {
         match *self {
             InterestingKind::Initial(ref initial) => initial.delta(),
-            InterestingKind::Reduction(ref reduction) => reduction.delta(),
+            InterestingKind::Candidate(ref candidate) => candidate.delta(),
         }
     }
 
     fn provenance(&self) -> &str {
         match *self {
             InterestingKind::Initial(ref i) => i.provenance(),
-            InterestingKind::Reduction(ref r) => r.provenance(),
+            InterestingKind::Candidate(ref r) => r.provenance(),
+        }
+    }
+
+    fn full_hash(&self) -> Blake2Hash {
+        match *self {
+            InterestingKind::Initial(ref i) => i.full_hash(),
+            InterestingKind::Candidate(ref r) => r.full_hash(),
+        }
+    }
+
+    fn diff_hash(&self) -> Blake2Hash {
+        match *self {
+            InterestingKind::Initial(ref i) => i.diff_hash(),
+            InterestingKind::Candidate(ref r) => r.diff_hash(),
         }
     }
 }
@@ -360,6 +472,9 @@ struct InitialInteresting {
 
     /// The size of the file.
     size: u64,
+
+    /// The hash of the full file contents.
+    full_hash: Blake2Hash,
 }
 
 impl hash::Hash for InitialInteresting {
@@ -384,16 +499,26 @@ impl TestCaseMethods for InitialInteresting {
     fn provenance(&self) -> &str {
         "<initial>"
     }
+
+    fn full_hash(&self) -> Blake2Hash {
+        self.full_hash
+    }
+
+    fn diff_hash(&self) -> Blake2Hash {
+        hash(&[][..]).expect("reading from an empty slice cannot fail")
+    }
 }
 
 #[cfg(test)]
-impl PotentialReduction {
-    pub fn testing_only_new() -> PotentialReduction {
-        PotentialReduction {
-            provenance: "PotentialReduction::testing_only_new".into(),
+impl Candidate {
+    pub fn testing_only_new() -> Candidate {
+        Candidate {
+            provenance: "Candidate::testing_only_new".into(),
             test_case: TempFile::anonymous().unwrap(),
             size: 0,
             delta: 0,
+            full_hash: Default::default(),
+            diff_hash: Default::default(),
         }
     }
 }
@@ -405,6 +530,7 @@ impl Interesting {
             kind: InterestingKind::Initial(InitialInteresting {
                 test_case: TempFile::anonymous().unwrap(),
                 size: 0,
+                full_hash: Default::default(),
             }),
         }
     }
@@ -509,42 +635,42 @@ mod tests {
             .expect("interesting should be ok")
             .expect("interesting should be some");
 
-        let reduction = PotentialReduction::testing_only_new();
+        let candidate = Candidate::testing_only_new();
         {
-            let mut reduction_file = fs::File::create(reduction.path()).unwrap();
-            writeln!(&mut reduction_file, "la").unwrap();
+            let mut candidate_file = fs::File::create(candidate.path()).unwrap();
+            writeln!(&mut candidate_file, "la").unwrap();
         }
 
-        let reduction = PotentialReduction::new(interesting, "test", reduction)
-            .expect("should create potenetial reduction");
+        let candidate = Candidate::new(interesting, "test", candidate)
+            .expect("should create potenetial candidate");
 
-        let interesting_reduction = reduction
+        let interesting_candidate = candidate
             .clone()
             .into_interesting(&judge)
-            .expect("interesting reduction should be ok")
+            .expect("interesting candidate should be ok")
             .left()
-            .expect("interesting reduction should be some");
+            .expect("interesting candidate should be some");
 
         assert_eq!(
-            interesting_reduction.path(),
-            reduction.path(),
-            "The interesting reduction's path should be the same as the potential reduction's path"
+            interesting_candidate.path(),
+            candidate.path(),
+            "The interesting candidate's path should be the same as the candidate's path"
         );
 
         assert!(
-            interesting_reduction.path().is_file(),
-            "The interesting reduction's path should have a file"
+            interesting_candidate.path().is_file(),
+            "The interesting candidate's path should have a file"
         );
 
-        let mut file = fs::File::open(&interesting_reduction.path())
-            .expect("The interesting reduction path should have a file");
+        let mut file = fs::File::open(&interesting_candidate.path())
+            .expect("The interesting candidate path should have a file");
         let mut contents = String::new();
         file.read_to_string(&mut contents)
             .expect("And we should read from that file");
         assert_eq!(contents, "la\n", "And it should have the expected contents");
 
         assert_eq!(
-            interesting_reduction.size(),
+            interesting_candidate.size(),
             contents.len() as u64,
             "And the test case should have the expected size"
         );

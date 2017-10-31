@@ -47,7 +47,7 @@ reported. Even for a program's developers, who are intimately familiar with its
 inner workings, isolating the relevant bits of a huge test case can be like
 finding a needle in a haystack.
 
-So why not automate the test case reduction process? This is exactly what
+So why not automate the test case candidate process? This is exactly what
 `preduce`, and programs that inspired it, provide.
 
 For more background:
@@ -111,7 +111,7 @@ Here are some tips for shell scripts:
 
 ### Using `preduce` as a Libary
 
-For programmatic control over reduction strategies and is-interesting
+For programmatic control over candidate strategies and is-interesting
 predicates, you can use the `preduce` crate as a library.
 
 Create a new executable crate with `cargo`:
@@ -145,22 +145,22 @@ the [`preduce` library documentation on docs.rs](https://docs.rs/preduce).
 ### Reducers
 
 A test case reducer is given a known-interesting test case, and yields a series
-of potentially interesting reductions of the known-interesting test case. Test
+of potentially interesting candidates of the known-interesting test case. Test
 case reducers are typically implemented as scripts invoked as subprocesses of
 `preduce`. This design is mimicked from C-Reduce, and allows `preduce` to reuse
 all of C-Reduce's test case reducers.
 
-`preduce`'s builtin test case reduction strategies include:
+`preduce`'s builtin test case candidate strategies include:
 
 * Removing a line of text
 * Removing a comment
 * Removing a contiguous, indented chunk of text
-* And all of C-Reduce's other reduction strategies
+* And all of C-Reduce's other candidate strategies
 
 Users may also provide their own reducers to be used alongside or instead of the
 builtin set of reducers.
 
-Custom reducers **must** produce *reductions* of their seed test case: each new
+Custom reducers **must** produce *candidates* of their seed test case: each new
 test case must be smaller in size than the seed. If this property is not held,
 `preduce` is not guaranteed to terminate.
 
@@ -181,12 +181,12 @@ alternative. What follows is largely an adaptation and summarization of John
 Regehr's blog post about making C-Reduce parallel in the first
 place: [Parallelizing Delta Debugging](http://blog.regehr.org/archives/749).
 
-Empirically, most reductions are not interesting. C-Reduce is most often used
+Empirically, most candidates are not interesting. C-Reduce is most often used
 with C/C++ compilers: whether they crash when compiling the test case, whether
 they miscompile it, etc. Indeed, I was using C-Reduce for a compiler as well,
 just not a typical one: `rust-bindgen`, which takes C/C++ headers and emits
 extern FFI declaration boiler plate for Rust programs that want to use the C/C++
-header's library. In such a scenario, it is easy to see that most reductions
+header's library. In such a scenario, it is easy to see that most candidates
 will change the semantics of the C/C++ program in ways such that the buggy code
 path in the compiler is not triggered, or, even more likely, produce an invalid
 C/C++ program.
@@ -205,7 +205,7 @@ N=number-of-cores workers to test each one's interesting-ness.
          ?    ?    ?
 
 Two of the workers complete, and find their test cases uninteresting, so
-C-Reduce spawns two new workers with the next reductions to be judged for
+C-Reduce spawns two new workers with the next candidates to be judged for
 interesting-ness.
 
         version O ----.
@@ -216,7 +216,7 @@ interesting-ness.
        X    X    ?      ?  ?
 
 Then a worker finds its test case interesting. All active workers' test cases
-are abandoned, and C-Reduce begins generating and testing reductions of the new,
+are abandoned, and C-Reduce begins generating and testing candidates of the new,
 smaller test case.
 
          version O -------.
@@ -231,17 +231,17 @@ smaller test case.
                 /   |   \
                ?    ?    ?
 
-This greedy search is repeated to a fixpoint where no further reductions are
+This greedy search is repeated to a fixpoint where no further candidates are
 interesting.
 
-C-Reduce doesn't worry about the work that is abandoned whenever a new reduction
-is judged interesting because most reductions aren't interesting.
+C-Reduce doesn't worry about the work that is abandoned whenever a new candidate
+is judged interesting because most candidates aren't interesting.
 
-But many reductions are independent of each other, for example removing one
+But many candidates are independent of each other, for example removing one
 function is often independent from removing another function. We can generate
-the "same" reduction once again for the new, reduced test case: same
+the "same" candidate once again for the new, reduced test case: same
 function-removal diff, different test case to apply the diff to. And then we
-begin testing that "same" reduction again, only to lose the race to be the first
+begin testing that "same" candidate again, only to lose the race to be the first
 worker to confirm interesting-ness once again, and we repeat this race-losing
 process potentially many times. The more workers we have, and the more
 parallelization we introduce, the more likely each worker is to lose the race,
@@ -265,24 +265,24 @@ case. Unlike C-Reduce, `preduce` does not abandon the work that workers are
 performing when a new most-reduced interesting test case is discovered, and
 instead let's them finish. If their test case is smaller than the current
 most-reduced interesting test case, then it becomes the new most-reduced
-interesting test case, and we start searching reductions generated from this new
+interesting test case, and we start searching candidates generated from this new
 test case. `preduce` also generates a merge between the new test case and what
 was (or still is, if this test case is smaller) the most-reduced interesting
-test case. This is inserted into the queue of reductions to test for
-interesting-ness the same as any other generated reduction. If the merge fails,
+test case. This is inserted into the queue of candidates to test for
+interesting-ness the same as any other generated candidate. If the merge fails,
 then it is discarded.
 
 This approach provides a definite answer to how often to merge: whenever an
 interesting test case is found. As for conflicts and merge failures, `preduce`
-builds a `git` history of the test case's reductions and uses `git`'s awareness
+builds a `git` history of the test case's candidates and uses `git`'s awareness
 of history to make more merges succeed. It also does dumb little tricks like
-shuffling the order of generated reductions so that a reducer which generates
-reductions in order (eg remove the first line, remove the second line, ...)
-doesn't accidentally make every reduction conflict with each other.
+shuffling the order of generated candidates so that a reducer which generates
+candidates in order (eg remove the first line, remove the second line, ...)
+doesn't accidentally make every candidate conflict with each other.
 
-Here is an illustration of `preduce`'s merging approach. A reduction is found
+Here is an illustration of `preduce`'s merging approach. A candidate is found
 interesting while two more are still being judged. This spawns off new workers
-for new reduction of the new test case. Some of these are judged uninteresting
+for new candidate of the new test case. Some of these are judged uninteresting
 quickly:
 
          version O ------------.
@@ -297,9 +297,9 @@ quickly:
                 /   |   \
                ?    X    X
 
-Meanwhile, one of the reductions of the initial test case is also judged
+Meanwhile, one of the candidates of the initial test case is also judged
 interesting. This kicks off a new worker, attempting to do a merge between the
-interesting reductions:
+interesting candidates:
 
          version O ------------.
            /|  \          \     \
@@ -313,8 +313,8 @@ interesting reductions:
                 /   |   \     \ /
                ?    X    X     ?
 
-Next, the last direct reduction of version 0 is judged uninteresting. We start
-testing the next reduction of the current most-reduced interesting test
+Next, the last direct candidate of version 0 is judged uninteresting. We start
+testing the next candidate of the current most-reduced interesting test
 case. For illustrative purposes, let's say that is version 1.0 (it could be
 either 1.0 or 1.1, it makes no difference).
 
@@ -350,12 +350,12 @@ The merge between 1.0 and 1.1 is found interesting, and becomes the smallest .
                                     ?
 
 This process continues until we reach a fixed point where there are no more
-reductions to make, or all reductions are found to be uninteresting.
+candidates to make, or all candidates are found to be uninteresting.
 
 Like C-Reduce's approach, this merge approach is also greedy. Just "slightly
 less" greedy, in that we try to avoid throwing away work we've aready started to
 do with the merges. Fundamentally, at each step we still only consider
-reductions of the current best choice.
+candidates of the current best choice.
 
 In order for this merging approach to be an improvement over C-Reduce's greedy,
 work-abandoning approach, the following assumptions must hold:
@@ -386,65 +386,65 @@ We are given:
 
 * An initial test case *T*.
 
-* The finite set of all the reductions we can make, *R = { r<sub>0</sub>,
-  r<sub>1</sub>, ..., r<sub>n</sub> }*. Applying a set of reductions *r ⊆ R* to
+* The finite set of all the candidates we can make, *R = { r<sub>0</sub>,
+  r<sub>1</sub>, ..., r<sub>n</sub> }*. Applying a set of candidates *r ⊆ R* to
   *T* produces the reduced test case *T<sub>r</sub>*. That is, *r* are patch
   operations producing reduced test cases, not reduced test cases themselves.
-  For simplicity, we assume that either reductions are associative and
+  For simplicity, we assume that either candidates are associative and
   commutative, or can be sorted meaningfully before applying them to *T*.
 
 With this in hand, we define the search space as the lattice produced by the
 powerset of *R*, with a partial ordering defined by set inclusion. There are
 2<sup>*n*</sup> elements in the search space.
 
-We begin our search from the bottom element: the empty set of reductions, ie the
-initial test case. We are ostensibly searching for the maximal reduction set
+We begin our search from the bottom element: the empty set of candidates, ie the
+initial test case. We are ostensibly searching for the maximal candidate set
 *r<sub>max</sub>* for which *f* returns true: *f(r<sub>max</sub>(T)) =
 true*. However, searching 2<sup>*n*</sup> elements is much too many to be
-practical, so we are searching for a *maximal enough* reduction set.
+practical, so we are searching for a *maximal enough* candidate set.
 
 C-Reduce makes a greedy depth first search up the lattice. It tests each
-reduction set *|r| = 1* until *f* returns true, and then tests each reduction
-set *|r| = 2* reachable by adding a single new reduction to the last reduction
+candidate set *|r| = 1* until *f* returns true, and then tests each candidate
+set *|r| = 2* reachable by adding a single new candidate to the last candidate
 set *|r| = 1* for which *f* returned true, etc... until it reaches a fixed
-point. It only adds reductions to the reduction set at any given step, and so
+point. It only adds candidates to the candidate set at any given step, and so
 the process is monotone. The fixed point is reached either because it walks to
-the top of the lattice (all reductions applied, the empty test case) or *f*
-returns false for all reduction sets with one more item than the current
-reduction set. There are *n* reduction sets *|r| = 1*, *n - 1* reduction sets
-*|r| = 2*, ..., 1 reduction set *|r| = n*. Therefore, it has running time of
+the top of the lattice (all candidates applied, the empty test case) or *f*
+returns false for all candidate sets with one more item than the current
+candidate set. There are *n* candidate sets *|r| = 1*, *n - 1* candidate sets
+*|r| = 2*, ..., 1 candidate set *|r| = n*. Therefore, it has running time of
 *O(n<sup>2</sup>)*.
 
 Merging fits right in with this reframing of the problem: it is the lattice's
-join operation: union of reduction sets. This preserves the monotone property of
+join operation: union of candidate sets. This preserves the monotone property of
 the process. It also runs in *O(n<sup>2</sup>)*.
 
 C-Reduce will go up the first path it finds where *f* is returning true, and may
-miss paths that ultimately go further up the lattice to a more larger reduction
-set, but begin "after" the entry point to the current reduction set. The merging
+miss paths that ultimately go further up the lattice to a more larger candidate
+set, but begin "after" the entry point to the current candidate set. The merging
 approach will find these paths *if* it began testing their entries for
 interesting-ness before the current path's entry was found interesting. The more
 parallel workers testing interesting-ness, the more likely to find such paths'
 entry points. This means that more parallel workers are a boon in a merging
 traversal, while in C-Reduce's current approach they are more likely to lose the
-race to first-interesting-reduction and do useless work. This is a nice
+race to first-interesting-candidate and do useless work. This is a nice
 improvement, if nothing else.
 
 Yet another alternative is to perform a depth-first search over the entire
 lattice space, but formalize the *maximal enough* property into a function of
-running time or size of the reduced test case. Then, if we ever find a reduction
+running time or size of the reduced test case. Then, if we ever find a candidate
 set that is both interesting and satisfies the *maximal enough* function, we
 stop.
 
 Maybe there is some more clever property of the lattice we can exploit to
-discover a *maximal enough* reduction set in much faster time, or with much
+discover a *maximal enough* candidate set in much faster time, or with much
 better parallelism. If you have ideas, please let me know!
 
 The frustration with this lattice perspective of the problem is that our
 is-interesting predicate function *f* itself is not guaranteed to be
-monotone. That is, it is possible that there is some interesting reduction set
-that is not reachable starting from the empty reduction set. This means that the
-combination of the reductions power set lattice with *f* is not itself a
+monotone. That is, it is possible that there is some interesting candidate set
+that is not reachable starting from the empty candidate set. This means that the
+combination of the candidates power set lattice with *f* is not itself a
 lattice.
 
 ## Why Not Merge `preduce` with C-Reduce?

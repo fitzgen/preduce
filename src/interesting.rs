@@ -9,8 +9,8 @@ use std::process;
 use traits::IsInteresting;
 
 impl IsInteresting for Box<IsInteresting> {
-    fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
-        (**self).is_interesting(potential_reduction)
+    fn is_interesting(&self, candidate: &path::Path) -> error::Result<bool> {
+        (**self).is_interesting(candidate)
     }
 
     fn clone(&self) -> Box<IsInteresting>
@@ -27,8 +27,8 @@ impl IsInteresting for Box<IsInteresting> {
 pub struct NonEmpty;
 
 impl IsInteresting for NonEmpty {
-    fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
-        let len = fs::File::open(potential_reduction)?.metadata()?.len();
+    fn is_interesting(&self, candidate: &path::Path) -> error::Result<bool> {
+        let len = fs::File::open(candidate)?.metadata()?.len();
         Ok(len != 0)
     }
 
@@ -111,8 +111,8 @@ impl Script {
 }
 
 impl IsInteresting for Script {
-    fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
-        assert!(potential_reduction.is_file());
+    fn is_interesting(&self, candidate: &path::Path) -> error::Result<bool> {
+        assert!(candidate.is_file());
         assert!(self.program.is_file());
 
         let mut cmd = process::Command::new(&self.program);
@@ -120,15 +120,12 @@ impl IsInteresting for Script {
             .stderr(process::Stdio::null())
             .stdin(process::Stdio::null());
 
-        match (
-            potential_reduction.parent(),
-            potential_reduction.file_name(),
-        ) {
+        match (candidate.parent(), candidate.file_name()) {
             (Some(dir), Some(file)) => {
                 cmd.current_dir(dir).arg(file);
             }
             _ => {
-                cmd.arg(potential_reduction);
+                cmd.arg(candidate);
             }
         }
 
@@ -192,11 +189,8 @@ where
     T: IsInteresting,
     U: IsInteresting,
 {
-    fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
-        Ok(
-            self.first.is_interesting(potential_reduction)?
-                && self.second.is_interesting(potential_reduction)?,
-        )
+    fn is_interesting(&self, candidate: &path::Path) -> error::Result<bool> {
+        Ok(self.first.is_interesting(candidate)? && self.second.is_interesting(candidate)?)
     }
 
     fn clone(&self) -> Box<IsInteresting>
@@ -255,11 +249,8 @@ where
     T: IsInteresting,
     U: IsInteresting,
 {
-    fn is_interesting(&self, potential_reduction: &path::Path) -> error::Result<bool> {
-        Ok(
-            self.first.is_interesting(potential_reduction)?
-                || self.second.is_interesting(potential_reduction)?,
-        )
+    fn is_interesting(&self, candidate: &path::Path) -> error::Result<bool> {
+        Ok(self.first.is_interesting(candidate)? || self.second.is_interesting(candidate)?)
     }
 
     fn clone(&self) -> Box<IsInteresting>
@@ -274,8 +265,8 @@ impl<T> IsInteresting for T
 where
     T: Clone + Send + UnwindSafe + for<'a> Fn(&'a path::Path) -> error::Result<bool>,
 {
-    fn is_interesting(&self, reduction: &path::Path) -> error::Result<bool> {
-        (*self)(reduction)
+    fn is_interesting(&self, candidate: &path::Path) -> error::Result<bool> {
+        (*self)(candidate)
     }
 
     fn clone(&self) -> Box<IsInteresting>

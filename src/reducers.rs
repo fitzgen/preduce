@@ -68,7 +68,7 @@ impl Reducer for Box<Reducer> {
         &mut self,
         seed: &test_case::Interesting,
         state: &Box<Any + Send>,
-    ) -> error::Result<Option<test_case::PotentialReduction>> {
+    ) -> error::Result<Option<test_case::Candidate>> {
         (**self).reduce(seed, state)
     }
 }
@@ -93,16 +93,16 @@ impl Reducer for Box<Reducer> {
 /// let mut script = preduce::reducers::Script::new("path/to/reducer/script")?;
 ///
 /// # let some_seed_test_case = || unimplemented!();
-/// // Get some known-interesting seed test case to create reductions from.
+/// // Get some known-interesting seed test case to create candidates from.
 /// let seed = some_seed_test_case();
 ///
 /// // Get the initial state for the given seed.
 /// let mut state = script.new_state(&seed)?;
 ///
-/// while let Some(reduction) = script.reduce(&seed, &state)? {
-///     println!("Here is a potential reduction: {:?}", reduction);
+/// while let Some(candidate) = script.reduce(&seed, &state)? {
+///     println!("Here is a candidate: {:?}", candidate);
 ///
-///     // Advance to the next state. Alternatively, if this reduction was
+///     // Advance to the next state. Alternatively, if this candidate was
 ///     // interesting, use `next_state_on_interesting`.
 ///     state = match script.next_state(&seed, &state)? {
 ///         None => break,
@@ -151,7 +151,7 @@ impl Script {
 
     /// Enable or disable extra strict checks on the reducer script.
     ///
-    /// For example, enforce that generated reductions are smaller than the
+    /// For example, enforce that generated candidates are smaller than the
     /// seed.
     pub fn set_strict(&mut self, be_strict: bool) {
         self.strict = be_strict;
@@ -219,7 +219,7 @@ impl Script {
     }
 
     fn next_temp_file(&mut self) -> error::Result<test_case::TempFile> {
-        let mut file_name = String::from("reduction");
+        let mut file_name = String::from("candidate");
         file_name.push_str(&self.counter.to_string());
         self.counter += 1;
 
@@ -418,7 +418,7 @@ impl Reducer for Script {
         &mut self,
         seed: &test_case::Interesting,
         state: &Box<Any + Send>,
-    ) -> error::Result<Option<test_case::PotentialReduction>> {
+    ) -> error::Result<Option<test_case::Candidate>> {
         if self.child.is_none() {
             self.spawn_child()?;
         }
@@ -441,7 +441,7 @@ impl Reducer for Script {
                         temp_file.path().display()
                     ));
                 }
-                Ok(Some(test_case::PotentialReduction::new(
+                Ok(Some(test_case::Candidate::new(
                     seed.clone(),
                     self.program.to_string_lossy(),
                     temp_file,
@@ -484,10 +484,10 @@ impl Reducer for Script {
 /// let seed = some_seed_test_case();
 /// let mut state = fused.new_state(&seed)?;
 ///
-/// while let Some(reduction) = fused.reduce(&seed, &state)? {
-///     println!("A potential reduction is {:?}", reduction);
+/// while let Some(candidate) = fused.reduce(&seed, &state)? {
+///     println!("A candidate is {:?}", candidate);
 ///
-///     // Advance to the next state. Alternatively, if this reduction was
+///     // Advance to the next state. Alternatively, if this candidate was
 ///     // interesting, use `next_state_on_interesting`.
 ///     state = match fused.next_state(&seed, &state)? {
 ///         None => break,
@@ -635,7 +635,7 @@ where
         &mut self,
         seed: &test_case::Interesting,
         state: &Box<Any + Send>,
-    ) -> error::Result<Option<test_case::PotentialReduction>> {
+    ) -> error::Result<Option<test_case::Candidate>> {
         let state = self.downcast(state);
         let mut state = state.borrow_mut();
 
@@ -707,9 +707,9 @@ mod tests {
                 &mut self,
                 _seed: &test_case::Interesting,
                 _state: &Box<Any + Send>,
-            ) -> error::Result<Option<test_case::PotentialReduction>> {
+            ) -> error::Result<Option<test_case::Candidate>> {
                 let result = match self.0 % 3 {
-                    0 => Ok(Some(test_case::PotentialReduction::testing_only_new())),
+                    0 => Ok(Some(test_case::Candidate::testing_only_new())),
                     1 => Ok(None),
                     2 => Err(error::Error::MisbehavingReducerScript("TEST".into())),
                     _ => unreachable!(),

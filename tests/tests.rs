@@ -58,7 +58,7 @@ macro_rules! test_preduce_runs {
             $name:ident => {
                 $test_case:expr,
                 judged by $predicate:expr,
-                reductions by [
+                candidates by [
                     $(
                         $reducer:expr ,
                     )*
@@ -83,14 +83,14 @@ test_preduce_runs! {
     lorem_ipsum => {
         "tests/fixtures/lorem-ipsum.txt",
         judged by "tests/predicates/has-lorem.sh",
-        reductions by [
+        candidates by [
             concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-chunks"),
         ]
     }
     cannot_reduce => {
         "tests/fixtures/cannot-reduce.txt",
         judged by "tests/predicates/is-cannot-reduce.sh",
-        reductions by [
+        candidates by [
             concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-angle"),
             concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-curly"),
             concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-paren"),
@@ -181,7 +181,7 @@ test_preduce_runs! {
     class_nine => {
         "tests/fixtures/nested-classes.cpp",
         judged by "tests/predicates/class-nine-compiles.sh",
-        reductions by [
+        candidates by [
             concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-balanced-curly"),
             concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-chunks"),
             concat!(env!("PREDUCE_TARGET_DIR"), "/preduce-reducer-clang-delta-reduce-class-template-param"),
@@ -213,15 +213,15 @@ where
         let next_state = {
             let state_ref = state
                 .as_ref()
-                .expect("Expecting another reduction, should have state");
+                .expect("Expecting another candidate, should have state");
 
-            let reduction = reducer
+            let candidate = reducer
                 .reduce(&seed, state_ref)
-                .expect("should generate next reduction OK")
+                .expect("should generate next candidate OK")
                 .expect("should not be exhausted");
 
             let expected = expected.as_ref().display().to_string();
-            let actual = reduction.path().display().to_string();
+            let actual = candidate.path().display().to_string();
 
             let output = Command::new("diff")
                 .args(&["-U100", &seed_string, &actual])
@@ -232,7 +232,7 @@ where
             println!();
             println!();
             println!("=======================================================");
-            println!("Actual reduction generated is:");
+            println!("Actual candidate generated is:");
             println!("-------------------------------------------------------");
             println!("{}", String::from_utf8_lossy(&output.stdout));
             println!("=======================================================");
@@ -240,7 +240,7 @@ where
             println!();
             println!();
             println!("=======================================================");
-            println!("Diff with expected reduction generated is:");
+            println!("Diff with expected candidate generated is:");
             println!("-------------------------------------------------------");
 
             let output = Command::new("diff")

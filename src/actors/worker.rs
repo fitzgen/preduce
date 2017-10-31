@@ -31,7 +31,7 @@ impl fmt::Display for WorkerId {
 /// Messages that can be sent to worker actors.
 #[derive(Debug)]
 enum WorkerMessage {
-    NextReduction(test_case::PotentialReduction),
+    NextCandidate(test_case::Candidate),
     Shutdown,
 }
 
@@ -86,9 +86,9 @@ impl Worker {
     }
 
     /// Send the worker the response to its request for another potential
-    /// reduction.
-    pub fn next_reduction(&self, reduction: test_case::PotentialReduction) {
-        let _ = self.sender.send(WorkerMessage::NextReduction(reduction));
+    /// candidate.
+    pub fn next_candidate(&self, candidate: test_case::Candidate) {
+        let _ = self.sender.send(WorkerMessage::NextCandidate(candidate));
     }
 }
 
@@ -112,7 +112,7 @@ impl fmt::Debug for WorkerActor {
 #[derive(Debug)]
 struct Test {
     worker: WorkerActor,
-    reduction: test_case::PotentialReduction,
+    candidate: test_case::Candidate,
 }
 
 #[derive(Debug)]
@@ -166,7 +166,7 @@ impl WorkerActor {
             logger: logger,
         };
 
-        let mut test = match worker.get_next_reduction(None) {
+        let mut test = match worker.get_next_candidate(None) {
             Some(test) => test,
             None => return Ok(()),
         };
@@ -182,22 +182,22 @@ impl WorkerActor {
                             // globally smallest interesting test case, but when
                             // we tried to reduce it further, we found it was
                             // already so minimal that the reducer couldn't
-                            // produce any potential reductions. Time to
+                            // produce any candidates. Time to
                             // shutdown.
                             return Ok(());
                         }
                         Some(new_test) => {
                             // That interesting test case became the new
                             // globally smallest interesting test case, and this
-                            // is a new reduction based on it for us to test.
+                            // is a new candidate based on it for us to test.
                             test = new_test;
                         }
                     }
                 }
                 Right((worker, not_interesting)) => {
                     // The test case was judged not interesting; grab a new
-                    // potential reduction to test.
-                    test = match worker.get_next_reduction(Some(not_interesting)) {
+                    // candidate to test.
+                    test = match worker.get_next_candidate(Some(not_interesting)) {
                         Some(test) => test,
                         None => return Ok(()),
                     };
@@ -211,34 +211,29 @@ impl WorkerActor {
         None
     }
 
-    fn get_next_reduction(
-        self,
-        not_interesting: Option<test_case::PotentialReduction>,
-    ) -> Option<Test> {
-        let _signpost = signposts::WorkerGetNextReduction::new();
+    fn get_next_candidate(self, not_interesting: Option<test_case::Candidate>) -> Option<Test> {
+        let _signpost = signposts::WorkerGetNextCandidate::new();
 
         self.supervisor
-            .request_next_reduction(self.me.clone(), not_interesting);
+            .request_next_candidate(self.me.clone(), not_interesting);
         match self.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => self.shutdown(),
-            WorkerMessage::NextReduction(reduction) => Some(Test {
+            WorkerMessage::NextCandidate(candidate) => Some(Test {
                 worker: self,
-                reduction: reduction,
+                candidate: candidate,
             }),
         }
     }
 }
 
 impl Test {
-    fn judge(
-        self,
-    ) -> error::Result<Either<Interesting, (WorkerActor, test_case::PotentialReduction)>> {
+    fn judge(self) -> error::Result<Either<Interesting, (WorkerActor, test_case::Candidate)>> {
         let _signpost = signposts::WorkerJudgeInteresting::new();
 
         self.worker
             .logger
-            .start_judging_interesting(self.worker.id, self.reduction.clone());
-        match self.reduction.into_interesting(&self.worker.predicate)? {
+            .start_judging_interesting(self.worker.id, self.candidate.clone());
+        match self.candidate.into_interesting(&self.worker.predicate)? {
             Left(interesting) => {
                 self.worker
                     .logger
@@ -268,9 +263,9 @@ impl Interesting {
 
         match self.worker.incoming.recv().unwrap() {
             WorkerMessage::Shutdown => self.worker.shutdown(),
-            WorkerMessage::NextReduction(reduction) => Some(Test {
+            WorkerMessage::NextCandidate(candidate) => Some(Test {
                 worker: self.worker,
-                reduction: reduction,
+                candidate: candidate,
             }),
         }
     }
