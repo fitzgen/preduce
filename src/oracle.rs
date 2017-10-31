@@ -1,6 +1,7 @@
 //! Determining the priority of candidates.
 
 use fixedbitset::FixedBitSet;
+use lru_cache;
 use score::Score;
 use std::collections::HashMap;
 use test_case::{self, TestCaseMethods};
@@ -267,6 +268,88 @@ impl traits::Oracle for PercentReduced {
     }
 }
 
+const LRU_CAPACITY: usize = 4096;
+
+/// An oracle that keeps track of test cases we've already seen before
+/// (conservatively, based on `TestCaseMethods::full_hash`) and severely
+/// de-prioritizes test cases we've already seen.
+#[derive(Debug)]
+pub struct HaveWeSeenIt {
+    seen: lru_cache::LruCache<test_case::Blake2Hash, ()>,
+}
+
+impl Default for HaveWeSeenIt {
+    fn default() -> HaveWeSeenIt {
+        HaveWeSeenIt {
+            seen: lru_cache::LruCache::new(LRU_CAPACITY),
+        }
+    }
+}
+
+impl traits::Oracle for HaveWeSeenIt {
+    fn observe_smallest_interesting(&mut self, interesting: &test_case::Interesting) {
+        self.seen.insert(interesting.full_hash(), ());
+    }
+
+    fn observe_not_smallest_interesting(&mut self, interesting: &test_case::Interesting) {
+        self.seen.insert(interesting.full_hash(), ());
+    }
+
+    fn observe_not_interesting(&mut self, candidate: &test_case::Candidate) {
+        self.seen.insert(candidate.full_hash(), ());
+    }
+
+    fn observe_exhausted(&mut self, _: &str) {}
+
+    fn predict(&mut self, candidate: &test_case::Candidate) -> Score {
+        if self.seen.contains_key(&candidate.full_hash()) {
+            Score::skip()
+        } else {
+            Score::new(1.0)
+        }
+    }
+}
+
+/// An oracle that keeps track of reductions we've already tried before
+/// (conservatively, based on `TestCaseMethods::diff_hash`) and de-prioritizes
+/// test cases for which we've already tried its reduction.
+#[derive(Debug)]
+pub struct HaveWeTriedIt {
+    tried: lru_cache::LruCache<test_case::Blake2Hash, ()>,
+}
+
+impl Default for HaveWeTriedIt {
+    fn default() -> HaveWeTriedIt {
+        HaveWeTriedIt {
+            tried: lru_cache::LruCache::new(LRU_CAPACITY),
+        }
+    }
+}
+
+impl traits::Oracle for HaveWeTriedIt {
+    fn observe_smallest_interesting(&mut self, interesting: &test_case::Interesting) {
+        self.tried.insert(interesting.diff_hash(), ());
+    }
+
+    fn observe_not_smallest_interesting(&mut self, interesting: &test_case::Interesting) {
+        self.tried.insert(interesting.diff_hash(), ());
+    }
+
+    fn observe_not_interesting(&mut self, candidate: &test_case::Candidate) {
+        self.tried.insert(candidate.diff_hash(), ());
+    }
+
+    fn observe_exhausted(&mut self, _: &str) {}
+
+    fn predict(&mut self, candidate: &test_case::Candidate) -> Score {
+        if self.tried.contains_key(&candidate.diff_hash()) {
+            Score::new(-1.0)
+        } else {
+            Score::new(1.0)
+        }
+    }
+}
+
 macro_rules! define_join_combinator {
     (
         $name:ident {
@@ -310,7 +393,7 @@ macro_rules! define_join_combinator {
             }
 
             fn predict(&mut self, candidate: &test_case::Candidate) -> Score {
-                Score::new(0.0 $( + f64::from(self.$inner.predict(candidate)) )+ )
+                Score::new(0.0) $( + self.$inner.predict(candidate) )+
             }
         }
     }

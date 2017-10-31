@@ -19,6 +19,7 @@ extern crate fixedbitset;
 extern crate generic_array;
 extern crate histo;
 extern crate is_executable;
+extern crate lru_cache;
 extern crate num_cpus;
 extern crate preduce_ipc_types;
 extern crate serde_json;

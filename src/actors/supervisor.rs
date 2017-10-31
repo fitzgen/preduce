@@ -6,6 +6,7 @@ use super::super::Options;
 use error;
 use oracle;
 use queue::CandidateQueue;
+use score::Score;
 use signposts;
 use std::any::Any;
 use std::cmp;
@@ -172,10 +173,12 @@ where
     exhausted_reducers: HashSet<ReducerId>,
     candidate_queue: CandidateQueue,
 
-    oracle: oracle::Join3<
+    oracle: oracle::Join5<
         oracle::InterestingRate,
         oracle::CreducePassPriorities,
         oracle::PercentReduced,
+        oracle::HaveWeSeenIt,
+        oracle::HaveWeTriedIt,
     >,
 }
 
@@ -373,13 +376,16 @@ where
 
                     if candidate.size() < smallest_interesting.size() {
                         let priority = self.oracle.predict(&candidate);
-                        self.candidate_queue
-                            .insert(candidate, reducer.id(), priority);
-                        self.drain_queues();
-                    } else {
-                        reducer.not_interesting(candidate);
-                        reducer.request_next_candidate(None);
+                        if let Score::TryIt(_) = priority {
+                            self.candidate_queue
+                                .insert(candidate, reducer.id(), priority);
+                            self.drain_queues();
+                            continue;
+                        }
                     }
+
+                    reducer.not_interesting(candidate);
+                    reducer.request_next_candidate(None);
                 }
 
                 SupervisorMessage::GotSigint => {
