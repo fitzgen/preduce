@@ -300,7 +300,7 @@ impl Logger {
         W: Write,
     {
         let mut to = io::BufWriter::new(to);
-        let mut smallest_size = 0;
+        let mut smallest_size: Option<u64> = None;
 
         // Candidate provenance -> (new smallest interesting,
         //                          interesting-but-not-smallest,
@@ -335,7 +335,7 @@ impl Logger {
                 LoggerMessage::NewSmallest(interesting, orig_size) => {
                     let new_size = interesting.size();
 
-                    smallest_size = new_size;
+                    smallest_size = Some(new_size);
 
                     println!(
                         "({:.2}%, {} bytes)",
@@ -418,7 +418,11 @@ impl Logger {
             }
         }
 
-        println!("Final size is {}", smallest_size);
+        if let Some(smallest_size) = smallest_size {
+            println!("Final size is {}", smallest_size);
+        } else {
+            println!("Could not reduce");
+        }
         println!();
 
         if !should_print_histograms {
